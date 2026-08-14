@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hk_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: hk_user
+      POSTGRES_PASSWORD: hk_password_secure_2026
+      POSTGRES_DB: hk_connect_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hk_user -d hk_connect_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hk_backend_api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: "postgresql://hk_user:hk_password_secure_2026@postgres:5432/hk_connect_db?schema=public"
+      JWT_ACCESS_SECRET: "hk_jwt_access_secret_super_key_2026_prod"
+      JWT_ACCESS_EXPIRES_IN: "15m"
+      JWT_REFRESH_SECRET: "hk_jwt_refresh_secret_super_key_2026_prod"
+      JWT_REFRESH_EXPIRES_IN: "30d"
+      ERP_API_KEY: "hk_erp_integration_api_key_v1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
