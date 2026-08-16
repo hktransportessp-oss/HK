@@ -133,4 +133,55 @@ describe('TripsService & Deliveries Lifecycle', () => {
     const completed = await service.completeTrip('trip-1', 'driver-1');
     expect(completed.status).toBe(TripStatus.COMPLETED);
   });
+
+  it('should maintain independent status when two trips are in progress and only one is completed', async () => {
+    const tripA = {
+      id: 'trip-A',
+      tripCode: 'TRIP-1001',
+      driverId: 'driver-1',
+      status: TripStatus.IN_PROGRESS,
+      deliveries: [{ id: 'del-A', status: DeliveryStatus.DELIVERED }],
+    };
+
+    const tripB = {
+      id: 'trip-B',
+      tripCode: 'TRIP-1002',
+      driverId: 'driver-1',
+      status: TripStatus.IN_PROGRESS,
+      deliveries: [{ id: 'del-B', status: DeliveryStatus.DELIVERED }],
+    };
+
+    // Mock findUnique to return the specific trip requested
+    mockPrisma.trip.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+      if (where.id === 'trip-A') return Promise.resolve(tripA);
+      if (where.id === 'trip-B') return Promise.resolve(tripB);
+      return Promise.resolve(null);
+    });
+
+    // Mock update to only update the targeted trip
+    mockPrisma.trip.update.mockImplementation(({ where, data }: { where: { id: string }, data: { status: TripStatus } }) => {
+      if (where.id === 'trip-A') {
+        return Promise.resolve({ ...tripA, status: data.status });
+      }
+      if (where.id === 'trip-B') {
+        return Promise.resolve({ ...tripB, status: data.status });
+      }
+      return Promise.resolve(null);
+    });
+
+    // Complete only trip-A
+    const completedA = await service.completeTrip('trip-A', 'driver-1');
+
+    expect(completedA.id).toBe('trip-A');
+    expect(completedA.status).toBe(TripStatus.COMPLETED);
+
+    // Verify trip-B was not updated and remains IN_PROGRESS
+    expect(mockPrisma.trip.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.trip.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'trip-A' },
+        data: expect.objectContaining({ status: TripStatus.COMPLETED }),
+      }),
+    );
+  });
 });

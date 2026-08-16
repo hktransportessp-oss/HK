@@ -1,0 +1,426 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+enum Role {
+  DRIVER
+  ADMIN
+  OPERATOR
+  MANAGER
+}
+
+enum TripStatus {
+  ASSIGNED
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_ROUTE
+  ARRIVED
+  DELIVERED
+  PARTIAL
+  REFUSED
+  OCCURRENCE
+}
+
+enum InvoiceStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+  CANCELLED
+}
+
+enum RomaneioStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TollStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  cpf           String         @unique
+  phone         String?
+  passwordHash  String
+  role          Role           @default(DRIVER)
+  status        String         @default("ACTIVE")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  driver        Driver?
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Driver {
+  id          String                   @id @default(uuid())
+  userId      String                   @unique
+  cnh         String
+  cnhCategory String
+  rntrc       String?
+  status      String                   @default("ATIVO")
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments DriverVehicleAssignment[]
+  trips       Trip[]
+  romaneios   Romaneio[]
+  tolls       Toll[]
+  occurrences Occurrence[]
+  settlements FinancialSettlement[]
+
+  @@map("drivers")
+}
+
+model Vehicle {
+  id          String                   @id @default(uuid())
+  plate       String                   @unique
+  model       String
+  brand       String
+  year        Int?
+  status      String                   @default("DISPONIVEL")
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  assignments DriverVehicleAssignment[]
+  trips       Trip[]
+
+  @@map("vehicles")
+}
+
+model DriverVehicleAssignment {
+  id        String    @id @default(uuid())
+  driverId  String
+  vehicleId String
+  isCurrent Boolean   @default(true)
+  startAt   DateTime  @default(now())
+  endAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  driver    Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, isCurrent])
+  @@map("driver_vehicle_assignments")
+}
+
+model Trip {
+  id          String                @id @default(uuid())
+  tripCode    String                @unique
+  driverId    String?
+  vehicleId   String?
+  origin      String
+  destination String
+  status      TripStatus            @default(ASSIGNED)
+  startDate   DateTime?
+  endDate     DateTime?
+  acceptedAt  DateTime?
+  notes       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  driver      Driver?               @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  vehicle     Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  stops       TripStop[]
+  deliveries  Delivery[]
+  invoices    Invoice[]
+  ctes        CTe[]
+  romaneios   Romaneio[]
+  tolls       Toll[]
+  settlements FinancialSettlement[]
+  occurrences Occurrence[]
+
+  @@index([driverId, status])
+  @@map("trips")
+}
+
+model TripStop {
+  id           String   @id @default(uuid())
+  tripId       String
+  stopOrder    Int
+  locationName String
+  address      String
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, stopOrder])
+  @@map("trip_stops")
+}
+
+model Delivery {
+  id                  String         @id @default(uuid())
+  tripId              String
+  recipient           String
+  recipientDocument   String?
+  address             String
+  numberAddress       String?
+  complement          String?
+  neighborhood        String?
+  city                String
+  state               String
+  postalCode          String?
+  latitude            Float?
+  longitude           Float?
+  customerId          String?
+  customerName        String?
+  sequence            Int            @default(1)
+  optimizedSequence   Int?
+  status              DeliveryStatus @default(PENDING)
+  volumeCount         Int            @default(1)
+  weight              Float          @default(0)
+  value               Float          @default(0)
+  quantityExpected    Int?
+  quantityDelivered   Int?
+  quantityMissing     Int?
+  deliveryWindowStart String?
+  deliveryWindowEnd   String?
+  lunchBreakStart     String?
+  lunchBreakEnd       String?
+  arrivedAt           DateTime?
+  deliveredAt         DateTime?
+  refusalReason       String?
+  notes               String?
+  observations        String?
+  podUrl              String?
+  podUploadedAt       DateTime?
+  podFileHash         String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  trip                Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  invoices            Invoice[]
+  occurrences         Occurrence[]
+
+  @@index([tripId, sequence])
+  @@map("deliveries")
+}
+
+model Invoice {
+  id                  String        @id @default(uuid())
+  number              String
+  accessKey           String        @unique
+  externalId          String?
+  tripId              String
+  deliveryId          String?
+  recipient           String
+  recipientDocument   String?
+  address             String
+  numberAddress       String?
+  complement          String?
+  neighborhood        String?
+  city                String
+  state               String
+  postalCode          String?
+  latitude            Float?
+  longitude           Float?
+  value               Float         @default(0)
+  weight              Float         @default(0)
+  volumeCount         Int           @default(1)
+  customerId          String?
+  customerName        String?
+  deliveryWindowStart String?
+  deliveryWindowEnd   String?
+  lunchBreakStart     String?
+  lunchBreakEnd       String?
+  observations        String?
+  status              InvoiceStatus @default(PENDING)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  trip                Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  delivery            Delivery?     @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([deliveryId])
+  @@map("invoices")
+}
+
+model CTe {
+  id        String   @id @default(uuid())
+  tripId    String
+  number    String
+  accessKey String   @unique
+  status    String   @default("EMITIDO")
+  value     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("ctes")
+}
+
+model Romaneio {
+  id           String             @id @default(uuid())
+  romaneioCode String             @unique
+  tripId       String?
+  driverId     String
+  notes        String?
+  status       RomaneioStatus     @default(PENDING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  trip         Trip?              @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  driver       Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  documents    RomaneioDocument[]
+
+  @@index([driverId])
+  @@index([tripId])
+  @@map("romaneios")
+}
+
+model RomaneioDocument {
+  id             String   @id @default(uuid())
+  romaneioId     String
+  documentType   String?
+  documentNumber String?
+  accessKey      String?
+  fileUrl        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  romaneio       Romaneio @relation(fields: [romaneioId], references: [id], onDelete: Cascade)
+
+  @@index([romaneioId])
+  @@map("romaneio_documents")
+}
+
+model Toll {
+  id         String        @id @default(uuid())
+  tripId     String?
+  driverId   String
+  amount     Float
+  date       String
+  plaza      String
+  highway    String
+  receiptUrl String?
+  notes      String?
+  status     TollStatus    @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  trip       Trip?         @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  driver     Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  receipts   TollReceipt[]
+
+  @@index([driverId])
+  @@index([tripId])
+  @@map("tolls")
+}
+
+model TollReceipt {
+  id        String   @id @default(uuid())
+  tollId    String
+  fileUrl   String
+  fileHash  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  toll      Toll     @relation(fields: [tollId], references: [id], onDelete: Cascade)
+
+  @@index([tollId])
+  @@map("toll_receipts")
+}
+
+model FinancialSettlement {
+  id               String                    @id @default(uuid())
+  settlementCode   String                    @unique
+  driverId         String
+  tripId           String?
+  periodStart      String
+  periodEnd        String
+  freightAmount    Float                     @default(0)
+  tollAmount       Float                     @default(0)
+  additionalAmount Float                     @default(0)
+  deductionsAmount Float                     @default(0)
+  netAmount        Float                     @default(0)
+  status           String                    @default("PENDING")
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  driver           Driver                    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  trip             Trip?                     @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  items            FinancialSettlementItem[]
+  payments         Payment[]
+
+  @@index([driverId])
+  @@index([tripId])
+  @@map("financial_settlements")
+}
+
+model FinancialSettlementItem {
+  id           String              @id @default(uuid())
+  settlementId String
+  description  String
+  type         String
+  amount       Float
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  settlement   FinancialSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId])
+  @@map("financial_settlement_items")
+}
+
+model Payment {
+  id            String              @id @default(uuid())
+  settlementId  String
+  amount        Float
+  paymentDate   DateTime            @default(now())
+  paymentMethod String              @default("PIX")
+  status        String              @default("PAID")
+  transactionId String?
+  receiptUrl    String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  settlement    FinancialSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId])
+  @@map("payments")
+}
+
+model Occurrence {
+  id          String    @id @default(uuid())
+  tripId      String
+  deliveryId  String?
+  driverId    String
+  title       String
+  description String
+  type        String
+  status      String    @default("OPEN")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  delivery    Delivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([deliveryId])
+  @@index([driverId])
+  @@map("occurrences")
+}
