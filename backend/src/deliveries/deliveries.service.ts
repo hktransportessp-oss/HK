@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto';
-import { DeliveryStatus, InvoiceStatus } from '@prisma/client';
+import { DeliveryStatus, InvoiceStatus, TripStatus } from '@prisma/client';
 
 @Injectable()
 export class DeliveriesService {
@@ -61,8 +61,8 @@ export class DeliveriesService {
   async complete(id: string, dto: CompleteDeliveryDto, driverId: string) {
     const delivery = await this.findOne(id, driverId);
 
-    // Verify trip is IN_PROGRESS or ARRIVED
-    if (delivery.trip.status !== 'IN_PROGRESS' && delivery.trip.status !== 'ARRIVED') {
+    // Verify trip is IN_PROGRESS
+    if (delivery.trip.status !== TripStatus.IN_PROGRESS) {
       throw new BadRequestException(
         'A viagem precisa estar em andamento para concluir entregas',
       );

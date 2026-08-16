@@ -22,7 +22,7 @@ export class RomaneiosService {
         tripId: dto.tripId || null,
         driverId: driverId,
         notes: dto.notes,
-        status: 'PENDING',
+        status: RomaneioStatus.PENDING,
       },
       include: {
         documents: true,

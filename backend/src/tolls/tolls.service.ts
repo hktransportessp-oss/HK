@@ -18,7 +18,7 @@ export class TollsService {
         highway: dto.highway,
         receiptUrl: dto.receiptUrl || null,
         notes: dto.notes,
-        status: 'PENDING',
+        status: TollStatus.PENDING,
       },
       include: {
         receipts: true,

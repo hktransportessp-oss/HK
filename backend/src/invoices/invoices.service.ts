@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ErpIntegrationService } from '../common/services/erp-integration.service';
 import { ScanInvoiceDto } from './dto/scan-invoice.dto';
+import { DeliveryStatus, InvoiceStatus } from '@prisma/client';
 
 @Injectable()
 export class InvoicesService {
@@ -118,7 +119,7 @@ export class InvoicesService {
           customerId: erpInvoice.customerId,
           customerName: erpInvoice.customerName || erpInvoice.recipient,
           sequence: nextSeq,
-          status: 'PENDING',
+          status: DeliveryStatus.PENDING,
           volumeCount: erpInvoice.volumeCount,
           weight: erpInvoice.weight,
           value: erpInvoice.value,
@@ -162,7 +163,7 @@ export class InvoicesService {
         lunchBreakStart: erpInvoice.lunchBreakStart,
         lunchBreakEnd: erpInvoice.lunchBreakEnd,
         observations: erpInvoice.observations,
-        status: 'IN_TRANSIT',
+        status: InvoiceStatus.IN_TRANSIT,
       },
     });
 
