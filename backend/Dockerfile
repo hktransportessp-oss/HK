@@ -35,10 +35,11 @@ FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Install runtime OpenSSL and CA certificates for Prisma and PostgreSQL TLS
+# Install runtime OpenSSL, CA certificates and curl for Docker healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -56,6 +57,10 @@ RUN npx prisma generate
 
 # Copy compiled build output from builder stage
 COPY --from=builder /app/dist ./dist
+
+# Healthcheck probe for Coolify / Docker Swarm / Kubernetes
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/health/live || exit 1
 
 # Expose NestJS API port
 EXPOSE 3000

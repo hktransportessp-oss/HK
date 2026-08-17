@@ -9,6 +9,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DeliveriesService } from './deliveries.service';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto';
+import { UploadPodDto } from './dto/upload-pod.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GetUser } from '../common/decorators/get-user.decorator';
 
@@ -51,13 +52,13 @@ export class DeliveriesController {
   @ApiOperation({ summary: 'Registra upload do canhoto digital da entrega' })
   async uploadPod(
     @Param('id') id: string,
-    @Body() body: { podUrl: string; podFileHash?: string },
+    @Body() dto: UploadPodDto,
     @GetUser('driverId') driverId: string,
   ) {
     return this.deliveriesService.uploadPod(
       id,
-      body.podUrl,
-      body.podFileHash,
+      dto.podUrl,
+      dto.podFileHash,
       driverId,
     );
   }

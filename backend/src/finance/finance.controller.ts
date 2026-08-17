@@ -19,8 +19,11 @@ export class FinanceController {
 
   @Get('settlements/:id')
   @ApiOperation({ summary: 'Obtém detalhes do fechamento com itens e pagamentos' })
-  async findSettlementById(@Param('id') id: string) {
-    return this.financeService.findSettlementById(id);
+  async findSettlementById(
+    @Param('id') id: string,
+    @GetUser('driverId') driverId: string,
+  ) {
+    return this.financeService.findSettlementById(id, driverId);
   }
 
   @Get('payments')

@@ -38,8 +38,11 @@ export class TollsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtém detalhes de um comprovante de pedágio' })
-  async findOne(@Param('id') id: string) {
-    return this.tollsService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @GetUser('driverId') driverId: string,
+  ) {
+    return this.tollsService.findOne(id, driverId);
   }
 
   @Patch(':id/status')
@@ -47,7 +50,8 @@ export class TollsController {
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: TollStatus,
+    @GetUser('driverId') driverId: string,
   ) {
-    return this.tollsService.updateStatus(id, status);
+    return this.tollsService.updateStatus(id, status, driverId);
   }
 }

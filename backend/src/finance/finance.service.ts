@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -17,7 +17,7 @@ export class FinanceService {
     });
   }
 
-  async findSettlementById(id: string) {
+  async findSettlementById(id: string, driverId?: string) {
     const settlement = await this.prisma.financialSettlement.findUnique({
       where: { id },
       include: {
@@ -30,6 +30,10 @@ export class FinanceService {
 
     if (!settlement) {
       throw new NotFoundException(`Fechamento financeiro com ID ${id} não encontrado`);
+    }
+
+    if (driverId && settlement.driverId !== driverId) {
+      throw new ForbiddenException('Acesso negado: este extrato financeiro pertence a outro motorista');
     }
 
     return settlement;

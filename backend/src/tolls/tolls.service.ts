@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTollDto } from './dto/create-toll.dto';
 import { TollStatus } from '@prisma/client';
@@ -37,7 +37,7 @@ export class TollsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, driverId?: string) {
     const toll = await this.prisma.toll.findUnique({
       where: { id },
       include: {
@@ -51,13 +51,21 @@ export class TollsService {
       throw new NotFoundException(`Comprovante de pedágio com ID ${id} não encontrado`);
     }
 
+    if (driverId && toll.driverId !== driverId) {
+      throw new ForbiddenException('Acesso negado: este comprovante de pedágio pertence a outro motorista');
+    }
+
     return toll;
   }
 
-  async updateStatus(id: string, status: TollStatus) {
+  async updateStatus(id: string, status: TollStatus, driverId?: string) {
     const toll = await this.prisma.toll.findUnique({ where: { id } });
     if (!toll) {
       throw new NotFoundException(`Pedágio com ID ${id} não encontrado`);
+    }
+
+    if (driverId && toll.driverId !== driverId) {
+      throw new ForbiddenException('Acesso negado: você não tem permissão para alterar este pedágio');
     }
 
     return this.prisma.toll.update({

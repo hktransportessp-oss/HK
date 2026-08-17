@@ -38,8 +38,11 @@ export class RomaneiosController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtém detalhes de um romaneio específico' })
-  async findOne(@Param('id') id: string) {
-    return this.romaneiosService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @GetUser('driverId') driverId: string,
+  ) {
+    return this.romaneiosService.findOne(id, driverId);
   }
 
   @Patch(':id/status')
@@ -47,7 +50,8 @@ export class RomaneiosController {
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: RomaneioStatus,
+    @GetUser('driverId') driverId: string,
   ) {
-    return this.romaneiosService.updateStatus(id, status);
+    return this.romaneiosService.updateStatus(id, status, driverId);
   }
 }
