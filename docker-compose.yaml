@@ -3,12 +3,14 @@ version: '3.8'
 services:
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     restart: always
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     env_file:
+      - path: ./backend/.env
+        required: false
       - path: .env
         required: false
     environment:

@@ -8,14 +8,15 @@ services:
     restart: always
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
+    env_file:
+      - path: .env
+        required: false
     environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
-
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL precisa estar configurada no Coolify}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET precisa estar configurada no Coolify}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET precisa estar configurada no Coolify}
-
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
@@ -23,6 +24,3 @@ services:
       ERP_API_KEY: ${ERP_API_KEY:-}
       HK_ERP_API_KEY: ${HK_ERP_API_KEY:-}
       HK_ERP_API_URL: ${HK_ERP_API_URL:-}
-
-
-
