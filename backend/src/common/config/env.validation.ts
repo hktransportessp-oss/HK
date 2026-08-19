@@ -1,5 +1,11 @@
 import { Logger } from '@nestjs/common';
 
+/**
+ * HK Connect Backend - Environment Configuration & Validation
+ * Build Version: 2026.08.18-v2
+ * Purpose: Strict validation of required runtime secrets and environment variables
+ */
+
 export interface AppConfig {
   NODE_ENV: 'development' | 'production' | 'test';
   PORT: number;
@@ -16,6 +22,15 @@ export interface AppConfig {
 
 export function validateEnvironment(): AppConfig {
   const logger = new Logger('EnvValidation');
+
+  // Diagnóstico seguro antes da validação estrita (sem expor valores sensíveis)
+  console.log({
+    DATABASE_URL_present: Boolean(process.env.DATABASE_URL),
+    JWT_ACCESS_SECRET_present: Boolean(process.env.JWT_ACCESS_SECRET),
+    JWT_REFRESH_SECRET_present: Boolean(process.env.JWT_REFRESH_SECRET),
+    NODE_ENV: process.env.NODE_ENV,
+  });
+
   const errors: string[] = [];
 
   const NODE_ENV =
@@ -30,10 +45,18 @@ export function validateEnvironment(): AppConfig {
     );
   }
 
-  const DATABASE_URL = process.env.DATABASE_URL;
+  // Leitura direta e limpeza de possíveis aspas envoltórias
+  let DATABASE_URL = process.env.DATABASE_URL?.trim();
+  if (DATABASE_URL && DATABASE_URL.startsWith('"') && DATABASE_URL.endsWith('"')) {
+    DATABASE_URL = DATABASE_URL.slice(1, -1).trim();
+  }
+  if (DATABASE_URL && DATABASE_URL.startsWith("'") && DATABASE_URL.endsWith("'")) {
+    DATABASE_URL = DATABASE_URL.slice(1, -1).trim();
+  }
+
   if (!DATABASE_URL) {
     errors.push(
-      'DATABASE_URL é obrigatória e não foi configurada nas variáveis de ambiente. Configure a connection string do PostgreSQL no painel do Coolify.',
+      'DATABASE_URL é obrigatória e não foi encontrada em process.env. Configure a connection string do PostgreSQL no painel do Coolify.',
     );
   } else if (
     !DATABASE_URL.startsWith('postgresql://') &&
@@ -44,12 +67,17 @@ export function validateEnvironment(): AppConfig {
     );
   }
 
-  // Em produção, exigimos secrets explícitos
+  // Validação direta do JWT_ACCESS_SECRET
+  let rawAccessSecret = process.env.JWT_ACCESS_SECRET?.trim();
+  if (rawAccessSecret && rawAccessSecret.startsWith('"') && rawAccessSecret.endsWith('"')) {
+    rawAccessSecret = rawAccessSecret.slice(1, -1).trim();
+  }
   const JWT_ACCESS_SECRET =
-    process.env.JWT_ACCESS_SECRET ||
+    rawAccessSecret ||
     (NODE_ENV === 'production'
       ? ''
       : 'hk_jwt_access_secret_super_key_2026_prod');
+
   if (!JWT_ACCESS_SECRET) {
     errors.push(
       'JWT_ACCESS_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify.',
@@ -60,11 +88,17 @@ export function validateEnvironment(): AppConfig {
     );
   }
 
+  // Validação direta do JWT_REFRESH_SECRET
+  let rawRefreshSecret = process.env.JWT_REFRESH_SECRET?.trim();
+  if (rawRefreshSecret && rawRefreshSecret.startsWith('"') && rawRefreshSecret.endsWith('"')) {
+    rawRefreshSecret = rawRefreshSecret.slice(1, -1).trim();
+  }
   const JWT_REFRESH_SECRET =
-    process.env.JWT_REFRESH_SECRET ||
+    rawRefreshSecret ||
     (NODE_ENV === 'production'
       ? ''
       : 'hk_jwt_refresh_secret_super_key_2026_prod');
+
   if (!JWT_REFRESH_SECRET) {
     errors.push(
       'JWT_REFRESH_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify.',
@@ -81,7 +115,7 @@ export function validateEnvironment(): AppConfig {
     );
     errors.forEach((err) => logger.error(`  👉 ${err}`));
     throw new Error(
-      `Falha de inicialização: ${errors.length} erro(s) de configuração de ambiente. Por favor, adicione as variáveis de ambiente necessárias no painel do Coolify.`,
+      `Falha de inicialização: ${errors.length} erro(s) de configuração de ambiente. Verifique as variáveis no painel do Coolify.`,
     );
   }
 
@@ -94,12 +128,12 @@ export function validateEnvironment(): AppConfig {
     PORT,
     DATABASE_URL: DATABASE_URL!,
     JWT_ACCESS_SECRET,
-    JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN?.trim() || '15m',
     JWT_REFRESH_SECRET,
-    JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
-    CORS_ORIGIN: process.env.CORS_ORIGIN,
+    JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN?.trim() || '30d',
+    CORS_ORIGIN: process.env.CORS_ORIGIN?.trim(),
     ENABLE_SWAGGER: process.env.ENABLE_SWAGGER === 'true',
-    ERP_API_KEY: process.env.HK_ERP_API_KEY || process.env.ERP_API_KEY,
-    HK_ERP_API_URL: process.env.HK_ERP_API_URL,
+    ERP_API_KEY: process.env.HK_ERP_API_KEY?.trim() || process.env.ERP_API_KEY?.trim(),
+    HK_ERP_API_URL: process.env.HK_ERP_API_URL?.trim(),
   };
 }
