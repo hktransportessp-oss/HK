@@ -54,6 +54,10 @@ class ApiClient private constructor(context: Context) {
         retrofit.create(TripsApiService::class.java)
     }
 
+    val trackingApiService: TrackingApiService by lazy {
+        retrofit.create(TrackingApiService::class.java)
+    }
+
     private fun createAuthApiService(): AuthApiService {
         val service = retrofit.create(AuthApiService::class.java)
         authApiServiceRef = service

@@ -62,6 +62,7 @@ model User {
   passwordHash  String
   role          Role           @default(DRIVER)
   status        String         @default("ACTIVE")
+  lastLoginAt   DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   driver        Driver?
@@ -100,6 +101,8 @@ model Driver {
   tolls       Toll[]
   occurrences Occurrence[]
   settlements FinancialSettlement[]
+  locations   DriverLocation[]
+  lastLocation DriverLastLocation?
 
   @@map("drivers")
 }
@@ -159,6 +162,8 @@ model Trip {
   tolls       Toll[]
   settlements FinancialSettlement[]
   occurrences Occurrence[]
+  locations   DriverLocation[]
+  lastLocations DriverLastLocation[]
 
   @@index([driverId, status])
   @@map("trips")
@@ -436,4 +441,55 @@ model IdempotencyRecord {
 
   @@index([key])
   @@map("idempotency_records")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  action       String
+  targetUserId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model DriverLocation {
+  id         String    @id @default(uuid())
+  driverId   String
+  tripId     String?
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  speed      Float?
+  heading    Float?
+  capturedAt DateTime
+  receivedAt DateTime  @default(now())
+  driver     Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  trip       Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@index([driverId])
+  @@index([capturedAt])
+  @@index([driverId, capturedAt])
+  @@map("driver_locations")
+}
+
+model DriverLastLocation {
+  driverId   String    @id
+  tripId     String?
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  speed      Float?
+  heading    Float?
+  capturedAt DateTime
+  receivedAt DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  driver     Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  trip       Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@map("driver_last_locations")
 }
