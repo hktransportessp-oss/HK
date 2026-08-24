@@ -69,6 +69,7 @@ export class IdempotencyService {
       this.logger.log(`[Idempotência PostgreSQL] Chave '${key}' registrada com sucesso.`);
     } catch (error) {
       this.logger.error(`Erro ao salvar idempotency key ${key}: ${(error as Error).message}`);
+      throw error;
     }
   }
 }

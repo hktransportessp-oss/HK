@@ -62,4 +62,16 @@ describe('IdempotencyService (PostgreSQL Persistence)', () => {
       }),
     });
   });
+
+  it('deve relançar erro ao falhar persistência para garantir rollback de transação', async () => {
+    const key = 'evt_settl_failed';
+    const payload = { success: true };
+    const dbError = new Error('Database deadlock or connection error');
+
+    mockPrisma.idempotencyRecord.upsert.mockRejectedValue(dbError);
+
+    await expect(
+      service.recordResponse(key, payload, '/api/v1/integrations/erp/settlements'),
+    ).rejects.toThrow(dbError);
+  });
 });
