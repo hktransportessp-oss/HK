@@ -1,19 +1,17 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
   Logger,
-  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IdempotencyService } from './services/idempotency.service';
-import { SettlementEventDto } from './dto/settlement-event.dto';
-import { PaymentEventDto } from './dto/payment-event.dto';
-import { ReceiptEventDto } from './dto/receipt-event.dto';
-import { AdjustmentEventDto } from './dto/adjustment-event.dto';
+import { ErpSettlementWebhookDto } from './dto/erp-webhook-envelope.dto';
+import { SettlementPayloadDto } from './dto/settlement-payload.dto';
+import { ErpPaymentWebhookDto, PaymentPayloadDto } from './dto/payment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
-import { GenericEventDto } from './dto/generic-event.dto';
-import { RomaneioStatus, TollStatus } from '@prisma/client';
+import { TollStatus, RomaneioStatus } from '@prisma/client';
 
 @Injectable()
 export class ErpIntegrationService {
@@ -25,19 +23,38 @@ export class ErpIntegrationService {
   ) {}
 
   /**
-   * Helper para resolução de motorista por ID ou por CPF
+   * Resolução DETERMINÍSTICA e segura do motorista.
+   * NUNCA utiliza fallbacks para motoristas aleatórios ou primeiros ativos.
    */
-  private async resolveDriverId(driverId?: string, driverCpf?: string): Promise<string> {
-    if (driverId) {
-      const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+  private async resolveDriverIdDeterministic(
+    driverInfo?: { id?: string; cpf?: string; name?: string },
+    prismaClient?: any,
+  ): Promise<string> {
+    const db = prismaClient || this.prisma;
+
+    if (!driverInfo || (!driverInfo.id && !driverInfo.cpf)) {
+      throw new BadRequestException(
+        'Dados de identificação do motorista ausentes (id ou cpf são obrigatórios)',
+      );
+    }
+
+    // 1. Busca direta por Driver ID
+    if (driverInfo.id) {
+      const driver = await db.driver.findUnique({
+        where: { id: driverInfo.id },
+      });
       if (driver) return driver.id;
     }
 
-    if (driverCpf) {
-      const cleanCpf = driverCpf.replace(/\D/g, '');
-      const user = await this.prisma.user.findFirst({
+    // 2. Busca determinística por CPF
+    if (driverInfo.cpf) {
+      const cleanCpf = driverInfo.cpf.replace(/\D/g, '');
+      const user = await db.user.findFirst({
         where: {
-          OR: [{ cpf: cleanCpf }, { cpf: driverCpf }],
+          OR: [
+            { cpf: cleanCpf },
+            { cpf: driverInfo.cpf },
+          ],
         },
         include: { driver: true },
       });
@@ -45,378 +62,294 @@ export class ErpIntegrationService {
       if (user?.driver) {
         return user.driver.id;
       }
+
+      // Tenta buscar no motorista diretamente caso haja campo de CPF ou similar
+      const driverByUserId = await db.driver.findFirst({
+        where: {
+          user: {
+            OR: [
+              { cpf: cleanCpf },
+              { cpf: driverInfo.cpf },
+            ],
+          },
+        },
+      });
+
+      if (driverByUserId) {
+        return driverByUserId.id;
+      }
     }
 
-    // Se nenhum motorista específico for localizado, busca o primeiro motorista ativo cadastrado no sistema
-    const firstDriver = await this.prisma.driver.findFirst({
-      where: { status: 'ATIVO' },
-    });
-
-    if (firstDriver) {
-      return firstDriver.id;
-    }
-
+    // Se não encontrado deterministicamente, REJEITA OBRIGATORIAMENTE sem alterar o banco
     throw new NotFoundException(
-      `Motorista não encontrado para vínculo (driverId: ${driverId}, driverCpf: ${driverCpf})`,
+      `Motorista não encontrado deterministicamente no cadastro HK Central (CPF: ${driverInfo.cpf || 'N/A'}, ID: ${driverInfo.id || 'N/A'}). Registro cancelado por segurança financeira.`,
     );
   }
 
   /**
-   * Helper para resolução de viagem por ID ou tripCode
+   * Helper para resolução de viagem opcional
    */
-  private async resolveTripId(tripId?: string, tripCode?: string): Promise<string | null> {
-    if (tripId) {
-      const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
-      if (trip) return trip.id;
-    }
-    if (tripCode) {
-      const trip = await this.prisma.trip.findUnique({ where: { tripCode } });
-      if (trip) return trip.id;
-    }
-    return null;
+  private async resolveTripId(tripId?: string, prismaClient?: any): Promise<string | null> {
+    if (!tripId) return null;
+    const db = prismaClient || this.prisma;
+    const trip = await db.trip.findUnique({ where: { id: tripId } });
+    return trip ? trip.id : null;
   }
 
   /**
-   * POST /api/v1/integrations/erp/settlements
-   * Processa fechamentos / extratos financeiros sincronizados pelo ERP
+   * Processa Webhooks de Fechamento Financeiro: settlement.created e settlement.updated
+   * Executado de forma estritamente TRANSACIONAL no PostgreSQL com registro atômico de idempotência.
    */
-  async processSettlement(dto: SettlementEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `settlement_${dto.settlementCode}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
-    if (cached) return cached;
-
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição idêntica de fechamento financeiro já em processamento');
+  async processSettlementEvent(
+    envelope: ErpSettlementWebhookDto,
+    headerIdempotencyKey?: string,
+  ) {
+    const key = headerIdempotencyKey || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
     }
 
-    try {
-      this.logger.log(`[ERP] Processando Fechamento Financeiro: ${dto.settlementCode}`);
-      const driverId = await this.resolveDriverId(dto.driverId, dto.driverCpf);
-      const tripId = await this.resolveTripId(dto.tripId, dto.tripCode);
+    // 1. Verificação prévia de Idempotência no PostgreSQL
+    const cached = await this.idempotencyService.getProcessedResponse(key);
+    if (cached) {
+      return cached;
+    }
 
-      const freightAmount = dto.freightAmount ?? 0;
-      const tollAmount = dto.tollAmount ?? 0;
-      const additionalAmount = dto.additionalAmount ?? 0;
-      const deductionsAmount = dto.deductionsAmount ?? 0;
-      const netAmount = dto.netAmount ?? freightAmount + tollAmount + additionalAmount - deductionsAmount;
+    const data: SettlementPayloadDto = envelope.data;
+    if (!data || !data.externalId) {
+      throw new BadRequestException('Payload de dados do fechamento inválido ou externalId ausente');
+    }
+
+    this.logger.log(
+      `[ERP ${envelope.event}] Processando fechamento ${data.externalId} para o motorista CPF: ${data.driver?.cpf || data.driver?.id}`,
+    );
+
+    // 2. Execução Atômica e Transacional
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Resolução determinística do motorista dentro da transação
+      const driverId = await this.resolveDriverIdDeterministic(data.driver, tx);
+      const tripId = await this.resolveTripId(data.internalId, tx);
+
+      // Calcular montantes com base no payload e itens
+      let freightAmount = 0;
+      let tollAmount = 0;
+      let additionalAmount = 0;
+      let deductionsAmount = data.discountAmount ?? 0;
+
+      if (data.items && Array.isArray(data.items)) {
+        for (const item of data.items) {
+          const type = (item.type || '').toUpperCase();
+          const amt = Number(item.amount) || 0;
+          if (type === 'FREIGHT') {
+            freightAmount += amt;
+          } else if (type === 'TOLL') {
+            tollAmount += amt;
+          } else if (type === 'BONUS' || type === 'CREDIT' || type === 'ADDITIONAL') {
+            additionalAmount += amt;
+          } else if (type === 'DISCOUNT' || type === 'DEBIT' || type === 'DEDUCTION') {
+            deductionsAmount += Math.abs(amt);
+          }
+        }
+      }
+
+      // Se grossAmount for fornecido e frete não estiver discriminado, atribui ao frete
+      if (freightAmount === 0 && data.grossAmount) {
+        freightAmount = data.grossAmount;
+      }
+
+      const netAmount = Number(data.netAmount) || (freightAmount + tollAmount + additionalAmount - deductionsAmount);
 
       // Upsert do fechamento financeiro
-      const settlement = await this.prisma.financialSettlement.upsert({
-        where: { settlementCode: dto.settlementCode },
+      const settlement = await tx.financialSettlement.upsert({
+        where: { settlementCode: data.externalId },
         update: {
           driverId,
           tripId: tripId || undefined,
-          periodStart: dto.periodStart,
-          periodEnd: dto.periodEnd,
+          periodStart: data.periodStart,
+          periodEnd: data.periodEnd,
           freightAmount,
           tollAmount,
           additionalAmount,
           deductionsAmount,
           netAmount,
-          status: dto.status || 'APPROVED',
+          status: data.status || 'APPROVED',
         },
         create: {
-          settlementCode: dto.settlementCode,
+          settlementCode: data.externalId,
           driverId,
-          tripId,
-          periodStart: dto.periodStart,
-          periodEnd: dto.periodEnd,
+          tripId: tripId || null,
+          periodStart: data.periodStart,
+          periodEnd: data.periodEnd,
           freightAmount,
           tollAmount,
           additionalAmount,
           deductionsAmount,
           netAmount,
-          status: dto.status || 'APPROVED',
-        },
-        include: {
-          items: true,
-          payments: true,
+          status: data.status || 'APPROVED',
         },
       });
 
-      // Sincronizar itens discriminados se fornecidos
-      if (dto.items && dto.items.length > 0) {
-        await this.prisma.financialSettlementItem.deleteMany({
-          where: { settlementId: settlement.id },
-        });
+      // Substituição atômica dos itens discriminados
+      await tx.financialSettlementItem.deleteMany({
+        where: { settlementId: settlement.id },
+      });
 
-        await this.prisma.financialSettlementItem.createMany({
-          data: dto.items.map((item) => ({
+      if (data.items && data.items.length > 0) {
+        await tx.financialSettlementItem.createMany({
+          data: data.items.map((item) => ({
             settlementId: settlement.id,
-            description: item.description,
-            type: item.type,
-            amount: item.amount,
+            description: item.description || item.externalId || 'Item de Fechamento',
+            type: item.type || 'FREIGHT',
+            amount: Number(item.amount) || 0,
           })),
         });
       }
 
-      const result = {
+      const responsePayload = {
         success: true,
-        action: 'PROCESSED',
-        message: `Fechamento financeiro ${dto.settlementCode} sincronizado com sucesso`,
+        event: envelope.event,
+        action: envelope.event === 'settlement.created' ? 'CREATED' : 'UPDATED',
         settlementId: settlement.id,
         settlementCode: settlement.settlementCode,
-        netAmount,
+        netAmount: settlement.netAmount,
         status: settlement.status,
-        updatedAt: new Date().toISOString(),
+        occurredAt: envelope.occurredAt,
+        processedAt: new Date().toISOString(),
       };
 
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar fechamento: ${(error as Error).message}`, (error as Error).stack);
-      throw error;
-    }
+      // Gravação atômica da chave de idempotência dentro da mesma transação
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/settlements`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
   }
 
   /**
-   * POST /api/v1/integrations/erp/payments
-   * Processa comprovantes e registros de pagamentos efetuados pelo ERP
+   * Processa Webhook de Pagamento: payment.confirmed
    */
-  async processPayment(dto: PaymentEventDto, idempotencyKey?: string) {
-    const key =
-      idempotencyKey ||
-      dto.idempotencyKey ||
-      `pay_${dto.settlementCode}_${dto.transactionId || dto.amount}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
-    if (cached) return cached;
-
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição idêntica de pagamento já em processamento');
+  async processPaymentEvent(
+    envelope: ErpPaymentWebhookDto,
+    headerIdempotencyKey?: string,
+  ) {
+    const key = headerIdempotencyKey || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
     }
 
-    try {
-      this.logger.log(`[ERP] Processando Pagamento para fechamento ${dto.settlementCode} no valor R$ ${dto.amount}`);
+    const cached = await this.idempotencyService.getProcessedResponse(key);
+    if (cached) {
+      return cached;
+    }
 
-      let settlement = await this.prisma.financialSettlement.findUnique({
-        where: { settlementCode: dto.settlementCode },
-      });
+    const data: PaymentPayloadDto = envelope.data;
+    if (!data || (!data.settlementCode && !data.settlementId)) {
+      throw new BadRequestException('Código ou ID do fechamento ausente no evento de pagamento');
+    }
 
-      if (!settlement && dto.settlementId) {
-        settlement = await this.prisma.financialSettlement.findUnique({
-          where: { id: dto.settlementId },
+    const result = await this.prisma.$transaction(async (tx) => {
+      let settlement = null;
+      if (data.settlementCode) {
+        settlement = await tx.financialSettlement.findUnique({
+          where: { settlementCode: data.settlementCode },
+        });
+      } else if (data.settlementId) {
+        settlement = await tx.financialSettlement.findUnique({
+          where: { id: data.settlementId },
         });
       }
 
       if (!settlement) {
         throw new NotFoundException(
-          `Fechamento financeiro ${dto.settlementCode} não encontrado para registrar o pagamento`,
+          `Fechamento financeiro "${data.settlementCode || data.settlementId}" não localizado para registrar pagamento`,
         );
       }
 
-      const payment = await this.prisma.payment.create({
+      const payment = await tx.payment.create({
         data: {
           settlementId: settlement.id,
-          amount: dto.amount,
-          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
-          paymentMethod: dto.paymentMethod || 'PIX',
-          status: dto.status || 'PAID',
-          transactionId: dto.transactionId || null,
-          receiptUrl: dto.receiptUrl || null,
+          amount: Number(data.amount) || 0,
+          paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
+          paymentMethod: data.paymentMethod || 'PIX',
+          status: data.status || 'PAID',
+          transactionId: data.transactionId || data.externalId || null,
+          receiptUrl: data.receiptUrl || null,
         },
       });
 
-      // Atualiza status do fechamento para PAID se o pagamento for confirmado
-      if (dto.status === 'PAID' || !dto.status) {
-        await this.prisma.financialSettlement.update({
+      if (data.status === 'PAID' || !data.status) {
+        await tx.financialSettlement.update({
           where: { id: settlement.id },
           data: { status: 'PAID' },
         });
       }
 
-      const result = {
+      const responsePayload = {
         success: true,
-        action: 'PROCESSED',
-        message: `Pagamento de R$ ${dto.amount} registrado para fechamento ${dto.settlementCode}`,
+        event: envelope.event,
+        action: 'PAYMENT_RECORDED',
         paymentId: payment.id,
-        settlementCode: dto.settlementCode,
-        transactionId: payment.transactionId,
+        settlementCode: settlement.settlementCode,
+        amount: payment.amount,
         paymentStatus: payment.status,
+        transactionId: payment.transactionId,
+        occurredAt: envelope.occurredAt,
+        processedAt: new Date().toISOString(),
       };
 
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar pagamento: ${(error as Error).message}`, (error as Error).stack);
-      throw error;
-    }
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/payments`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
   }
 
   /**
-   * POST /api/v1/integrations/erp/receipts
-   * Registra comprovantes validados pelo ERP
+   * Sincronização de Pedágios validados no ERP
    */
-  async processReceipt(dto: ReceiptEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `receipt_${dto.type}_${dto.entityId || dto.fileUrl}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
+  async processTollEvent(dto: TollEventDto, idempotencyKey: string) {
+    const cached = await this.idempotencyService.getProcessedResponse(idempotencyKey);
     if (cached) return cached;
 
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição de comprovante em processamento');
-    }
-
-    try {
-      this.logger.log(`[ERP] Processando Comprovante tipo ${dto.type}`);
-
-      let attachedEntity = null;
-
-      if (dto.type === 'TOLL' && dto.entityId) {
-        const toll = await this.prisma.toll.findUnique({ where: { id: dto.entityId } });
-        if (toll) {
-          await this.prisma.tollReceipt.create({
-            data: {
-              tollId: toll.id,
-              fileUrl: dto.fileUrl,
-              fileHash: dto.fileHash || null,
-            },
-          });
-          attachedEntity = `Toll:${toll.id}`;
-        }
-      } else if (dto.type === 'PAYMENT' && dto.entityId) {
-        await this.prisma.payment.updateMany({
-          where: { id: dto.entityId },
-          data: { receiptUrl: dto.fileUrl },
-        });
-        attachedEntity = `Payment:${dto.entityId}`;
-      }
-
-      const result = {
-        success: true,
-        action: 'RECEIPT_REGISTERED',
-        type: dto.type,
-        fileUrl: dto.fileUrl,
-        attachedTo: attachedEntity || 'UNATTACHED_GLOBAL',
-        notes: dto.notes || 'Comprovante auditado e armazenado com sucesso',
-      };
-
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar comprovante: ${(error as Error).message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * POST /api/v1/integrations/erp/adjustments
-   * Registra acréscimos, descontos ou ajustes em fechamentos
-   */
-  async processAdjustment(dto: AdjustmentEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `adj_${dto.settlementCode}_${dto.description}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
-    if (cached) return cached;
-
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição de ajuste em processamento');
-    }
-
-    try {
-      this.logger.log(`[ERP] Processando Ajuste para fechamento ${dto.settlementCode}: ${dto.description}`);
-
-      const settlement = await this.prisma.financialSettlement.findUnique({
-        where: { settlementCode: dto.settlementCode },
-      });
-
-      if (!settlement) {
-        throw new NotFoundException(`Fechamento financeiro ${dto.settlementCode} não encontrado`);
-      }
-
-      const item = await this.prisma.financialSettlementItem.create({
-        data: {
-          settlementId: settlement.id,
-          description: dto.description,
-          type: dto.type,
-          amount: dto.amount,
-        },
-      });
-
-      // Recalcular saldo líquido do fechamento
-      const allItems = await this.prisma.financialSettlementItem.findMany({
-        where: { settlementId: settlement.id },
-      });
-
-      let calculatedDeductions = settlement.deductionsAmount;
-      let calculatedAdditions = settlement.additionalAmount;
-
-      if (dto.type === 'DEDUCTION' || dto.type === 'DISCOUNT' || dto.type === 'DEBIT') {
-        calculatedDeductions += Math.abs(dto.amount);
-      } else {
-        calculatedAdditions += Math.abs(dto.amount);
-      }
-
-      const updatedNetAmount =
-        settlement.freightAmount +
-        settlement.tollAmount +
-        calculatedAdditions -
-        calculatedDeductions;
-
-      await this.prisma.financialSettlement.update({
-        where: { id: settlement.id },
-        data: {
-          additionalAmount: calculatedAdditions,
-          deductionsAmount: calculatedDeductions,
-          netAmount: updatedNetAmount,
-        },
-      });
-
-      const result = {
-        success: true,
-        action: 'ADJUSTMENT_APPLIED',
-        itemId: item.id,
-        settlementCode: dto.settlementCode,
-        newNetAmount: updatedNetAmount,
-      };
-
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao aplicar ajuste: ${(error as Error).message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * POST /api/v1/integrations/erp/tolls
-   * Atualiza status ou sincroniza reembolsos de pedágios validados no ERP
-   */
-  async processToll(dto: TollEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `toll_${dto.tollId || dto.date || Date.now()}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
-    if (cached) return cached;
-
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição de pedágio em processamento');
-    }
-
-    try {
-      this.logger.log(`[ERP] Processando Pedágio: Status ${dto.status} (ID: ${dto.tollId})`);
-
+    const result = await this.prisma.$transaction(async (tx) => {
       let toll = null;
       if (dto.tollId) {
-        toll = await this.prisma.toll.findUnique({ where: { id: dto.tollId } });
+        toll = await tx.toll.findUnique({ where: { id: dto.tollId } });
       }
 
       if (toll) {
-        toll = await this.prisma.toll.update({
+        toll = await tx.toll.update({
           where: { id: toll.id },
           data: {
-            status: dto.status,
+            status: dto.status || TollStatus.APPROVED,
             notes: dto.notes || toll.notes,
           },
         });
       } else {
-        const driverId = await this.resolveDriverId(dto.driverId, dto.driverCpf);
-        toll = await this.prisma.toll.create({
+        const driverId = await this.resolveDriverIdDeterministic(
+          { id: dto.driverId, cpf: dto.driverCpf },
+          tx,
+        );
+
+        toll = await tx.toll.create({
           data: {
             driverId,
             tripId: dto.tripId || null,
             amount: dto.amount ?? 0,
             date: dto.date || new Date().toISOString().split('T')[0],
-            plaza: dto.plaza || 'Praça Central',
+            plaza: dto.plaza || 'Praça de Pedágio',
             highway: dto.highway || 'Rodovia',
             receiptUrl: dto.receiptUrl || null,
             notes: dto.notes,
@@ -425,7 +358,7 @@ export class ErpIntegrationService {
         });
       }
 
-      const result = {
+      const responsePayload = {
         success: true,
         action: 'TOLL_SYNCHRONIZED',
         tollId: toll.id,
@@ -433,35 +366,34 @@ export class ErpIntegrationService {
         amount: toll.amount,
       };
 
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar pedágio: ${(error as Error).message}`);
-      throw error;
-    }
+      await this.idempotencyService.recordResponse(
+        idempotencyKey,
+        responsePayload,
+        `/api/v1/integrations/erp/tolls`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
   }
 
   /**
-   * POST /api/v1/integrations/erp/romaneios
-   * Atualiza status ou sincroniza romaneios de carga do ERP
+   * Sincronização de Romaneios validados no ERP
    */
-  async processRomaneio(dto: RomaneioEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `rom_${dto.romaneioCode}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
+  async processRomaneioEvent(dto: RomaneioEventDto, idempotencyKey: string) {
+    const cached = await this.idempotencyService.getProcessedResponse(idempotencyKey);
     if (cached) return cached;
 
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Requisição de romaneio em processamento');
-    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      const driverId = await this.resolveDriverIdDeterministic(
+        { id: dto.driverId, cpf: dto.driverCpf },
+        tx,
+      );
+      const tripId = await this.resolveTripId(dto.tripId, tx);
 
-    try {
-      this.logger.log(`[ERP] Processando Romaneio: ${dto.romaneioCode}`);
-
-      const driverId = await this.resolveDriverId(dto.driverId, dto.driverCpf);
-      const tripId = await this.resolveTripId(dto.tripId);
-
-      const romaneio = await this.prisma.romaneio.upsert({
+      const romaneio = await tx.romaneio.upsert({
         where: { romaneioCode: dto.romaneioCode },
         update: {
           status: dto.status || RomaneioStatus.APPROVED,
@@ -478,7 +410,7 @@ export class ErpIntegrationService {
 
       if (dto.documents && dto.documents.length > 0) {
         for (const doc of dto.documents) {
-          await this.prisma.romaneioDocument.create({
+          await tx.romaneioDocument.create({
             data: {
               romaneioId: romaneio.id,
               documentType: doc.documentType,
@@ -490,7 +422,7 @@ export class ErpIntegrationService {
         }
       }
 
-      const result = {
+      const responsePayload = {
         success: true,
         action: 'ROMANEIO_SYNCHRONIZED',
         romaneioId: romaneio.id,
@@ -498,70 +430,54 @@ export class ErpIntegrationService {
         status: romaneio.status,
       };
 
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar romaneio: ${(error as Error).message}`);
-      throw error;
-    }
+      await this.idempotencyService.recordResponse(
+        idempotencyKey,
+        responsePayload,
+        `/api/v1/integrations/erp/romaneios`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
   }
 
   /**
-   * POST /api/v1/integrations/erp/events
    * Receptor genérico de Webhooks do ecossistema ERP
    */
-  async processEvent(dto: GenericEventDto, idempotencyKey?: string) {
-    const key = idempotencyKey || dto.idempotencyKey || `event_${dto.eventType}_${Date.now()}`;
-    const cached = this.idempotencyService.getProcessedResponse(key);
+  async processGenericEvent(envelope: any, idempotencyKey: string) {
+    const key = idempotencyKey || envelope.idempotencyKey;
+    const cached = await this.idempotencyService.getProcessedResponse(key);
     if (cached) return cached;
 
-    if (!this.idempotencyService.acquireLock(key)) {
-      throw new ConflictException('Evento idêntico em processamento');
-    }
+    const event = envelope.event || envelope.eventType;
 
-    try {
-      this.logger.log(`[ERP] Processando Evento Genérico: ${dto.eventType}`);
-
-      let subResult = null;
-      switch (dto.eventType) {
-        case 'settlement.created':
-        case 'settlement.updated':
-        case 'settlement.approved':
-          subResult = await this.processSettlement(dto.payload as SettlementEventDto, key);
-          break;
-        case 'payment.confirmed':
-        case 'payment.created':
-          subResult = await this.processPayment(dto.payload as PaymentEventDto, key);
-          break;
-        case 'toll.approved':
-        case 'toll.rejected':
-          subResult = await this.processToll(dto.payload as TollEventDto, key);
-          break;
-        case 'romaneio.approved':
-        case 'romaneio.synced':
-          subResult = await this.processRomaneio(dto.payload as RomaneioEventDto, key);
-          break;
-        default:
-          subResult = {
-            acknowledged: true,
-            eventType: dto.eventType,
-            processedAt: new Date().toISOString(),
-          };
-      }
-
-      const result = {
+    let subResult = null;
+    if (event === 'settlement.created' || event === 'settlement.updated') {
+      subResult = await this.processSettlementEvent(envelope as ErpSettlementWebhookDto, key);
+      return subResult;
+    } else if (event === 'payment.confirmed' || event === 'payment.created') {
+      subResult = await this.processPaymentEvent(envelope as ErpPaymentWebhookDto, key);
+      return subResult;
+    } else {
+      // Evento sem mapeamento financeiro seguro: armazena sem alterar dados financeiros incorretamente
+      const responsePayload = {
         success: true,
-        eventType: dto.eventType,
-        data: subResult,
+        acknowledged: true,
+        event,
+        message: `Evento "${event}" recebido e armazenado com sucesso`,
+        occurredAt: envelope.occurredAt || new Date().toISOString(),
+        processedAt: new Date().toISOString(),
       };
 
-      this.idempotencyService.recordResponse(key, result);
-      return result;
-    } catch (error) {
-      this.idempotencyService.releaseLock(key);
-      this.logger.error(`[ERP] Erro ao processar evento genérico: ${(error as Error).message}`);
-      throw error;
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/events`,
+      );
+
+      return responsePayload;
     }
   }
 }

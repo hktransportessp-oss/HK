@@ -424,3 +424,16 @@ model Occurrence {
   @@index([driverId])
   @@map("occurrences")
 }
+
+model IdempotencyRecord {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  endpoint   String?
+  statusCode Int      @default(200)
+  response   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([key])
+  @@map("idempotency_records")
+}

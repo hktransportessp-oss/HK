@@ -1,87 +1,74 @@
 import { Injectable, Logger } from '@nestjs/common';
-
-export interface IdempotencyRecord {
-  key: string;
-  response: any;
-  createdAt: number;
-}
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class IdempotencyService {
   private readonly logger = new Logger(IdempotencyService.name);
-  private readonly store = new Map<string, IdempotencyRecord>();
-  private readonly inFlight = new Set<string>();
-  private readonly TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
-  constructor() {
-    // Limpeza periódica de chaves expiradas a cada 1 hora
-    setInterval(() => this.cleanup(), 60 * 60 * 1000).unref();
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Verifica se uma requisição com esta chave já foi processada.
-   * Se já processada, retorna o resultado cacheado para evitar efeitos colaterais duplicados.
+   * Busca registro de idempotência persistido no PostgreSQL.
+   * Se já processada, retorna o resultado salvo para garantir replays seguros entre réplicas e reinicializações.
    */
-  getProcessedResponse(key: string): any | null {
+  async getProcessedResponse(key: string): Promise<any | null> {
     if (!key) return null;
-    const record = this.store.get(key);
-    if (!record) return null;
 
-    if (Date.now() - record.createdAt > this.TTL_MS) {
-      this.store.delete(key);
+    try {
+      const record = await this.prisma.idempotencyRecord.findUnique({
+        where: { key },
+      });
+
+      if (!record) return null;
+
+      this.logger.log(`[Idempotência PostgreSQL] Replay detectado para a chave '${key}'.`);
+      const parsedResponse = JSON.parse(record.response);
+
+      return {
+        ...parsedResponse,
+        idempotency: {
+          replayed: true,
+          originalCreatedAt: record.createdAt.toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao consultar registro de idempotência para ${key}: ${(error as Error).message}`);
       return null;
     }
-
-    this.logger.log(`[Idempotência] Reenvio detectado para a chave '${key}'. Retornando resposta em cache.`);
-    return {
-      ...record.response,
-      idempotency: {
-        replayed: true,
-        originalCreatedAt: new Date(record.createdAt).toISOString(),
-      },
-    };
   }
 
   /**
-   * Registra a resposta com sucesso vinculada à chave de idempotência.
+   * Salva atomicamente no PostgreSQL o registro de idempotência.
+   * Se for executado dentro de uma transação Prisma, pode reutilizar o tx client.
    */
-  recordResponse(key: string, response: any): void {
+  async recordResponse(
+    key: string,
+    response: any,
+    endpoint?: string,
+    prismaClient?: any,
+  ): Promise<void> {
     if (!key) return;
-    this.store.set(key, {
-      key,
-      response,
-      createdAt: Date.now(),
-    });
-    this.inFlight.delete(key);
-  }
 
-  /**
-   * Bloqueia execução concorrente da mesma chave
-   */
-  acquireLock(key: string): boolean {
-    if (!key) return true;
-    if (this.inFlight.has(key)) {
-      return false;
-    }
-    this.inFlight.add(key);
-    return true;
-  }
+    const db = prismaClient || this.prisma;
+    const serializedResponse = JSON.stringify(response);
 
-  /**
-   * Libera bloqueio em caso de falha
-   */
-  releaseLock(key: string): void {
-    if (key) {
-      this.inFlight.delete(key);
-    }
-  }
-
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, record] of this.store.entries()) {
-      if (now - record.createdAt > this.TTL_MS) {
-        this.store.delete(key);
-      }
+    try {
+      await db.idempotencyRecord.upsert({
+        where: { key },
+        update: {
+          response: serializedResponse,
+          endpoint: endpoint || null,
+          updatedAt: new Date(),
+        },
+        create: {
+          key,
+          endpoint: endpoint || null,
+          response: serializedResponse,
+        },
+      });
+      this.logger.log(`[Idempotência PostgreSQL] Chave '${key}' registrada com sucesso.`);
+    } catch (error) {
+      this.logger.error(`Erro ao salvar idempotency key ${key}: ${(error as Error).message}`);
     }
   }
 }

@@ -6,6 +6,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,13 +16,14 @@ import {
 } from '@nestjs/swagger';
 import { ErpIntegrationService } from './erp-integration.service';
 import { ErpAuthGuard } from './guards/erp-auth.guard';
-import { SettlementEventDto } from './dto/settlement-event.dto';
-import { PaymentEventDto } from './dto/payment-event.dto';
-import { ReceiptEventDto } from './dto/receipt-event.dto';
-import { AdjustmentEventDto } from './dto/adjustment-event.dto';
+import {
+  ErpSettlementWebhookDto,
+} from './dto/erp-webhook-envelope.dto';
+import {
+  ErpPaymentWebhookDto,
+} from './dto/payment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
-import { GenericEventDto } from './dto/generic-event.dto';
 
 @ApiTags('ERP Integrations')
 @ApiHeader({
@@ -37,12 +39,12 @@ import { GenericEventDto } from './dto/generic-event.dto';
 @ApiHeader({
   name: 'x-hk-signature',
   description: 'Assinatura HMAC-SHA256 do conteúdo "<timestamp>.<raw_body>" com ERP_WEBHOOK_SECRET',
-  required: false,
+  required: true,
 })
 @ApiHeader({
   name: 'idempotency-key',
   description: 'Chave de idempotência única para prevenir execuções duplicadas',
-  required: false,
+  required: true,
 })
 @UseGuards(ErpAuthGuard)
 @Controller('api/v1/integrations/erp')
@@ -52,63 +54,39 @@ export class ErpIntegrationController {
   @Post('settlements')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Recebe e sincroniza fechamentos financeiros / extratos emitidos pelo ERP',
-    description: 'Atualiza valores de frete, pedágio, descontos, bônus e itens detalhados do motorista.',
+    summary: 'Recebe eventos settlement.created e settlement.updated do ERP',
+    description: 'Processa transacionalmente o fechamento financeiro com base no envelope oficial do HK ERP.',
   })
-  @ApiResponse({ status: 200, description: 'Fechamento financeiro sincronizado com sucesso' })
+  @ApiResponse({ status: 200, description: 'Fechamento financeiro processado e persistido com sucesso' })
   async receiveSettlement(
-    @Body() dto: SettlementEventDto,
+    @Body() envelope: ErpSettlementWebhookDto,
     @Headers('idempotency-key') idempotencyHeader?: string,
     @Headers('x-idempotency-key') xIdempotencyHeader?: string,
   ) {
-    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processSettlement(dto, key);
+    const key = idempotencyHeader || xIdempotencyHeader || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processSettlementEvent(envelope, key);
   }
 
   @Post('payments')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Recebe e registra confirmações de pagamentos e repasses efetuados pelo ERP',
+    summary: 'Recebe eventos payment.confirmed do ERP',
     description: 'Registra comprovantes, transações PIX/TED e atualiza status do fechamento financeiro.',
   })
   @ApiResponse({ status: 200, description: 'Pagamento registrado com sucesso' })
   async receivePayment(
-    @Body() dto: PaymentEventDto,
+    @Body() envelope: ErpPaymentWebhookDto,
     @Headers('idempotency-key') idempotencyHeader?: string,
     @Headers('x-idempotency-key') xIdempotencyHeader?: string,
   ) {
-    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processPayment(dto, key);
-  }
-
-  @Post('receipts')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Recebe e armazena comprovantes e documentos anexos validados pelo ERP',
-  })
-  @ApiResponse({ status: 200, description: 'Comprovante registrado com sucesso' })
-  async receiveReceipt(
-    @Body() dto: ReceiptEventDto,
-    @Headers('idempotency-key') idempotencyHeader?: string,
-    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
-  ) {
-    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processReceipt(dto, key);
-  }
-
-  @Post('adjustments')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Registra ajustes financeiros (bônus, descontos, vales) diretamente em fechamentos',
-  })
-  @ApiResponse({ status: 200, description: 'Ajuste aplicado e saldo recalculado com sucesso' })
-  async receiveAdjustment(
-    @Body() dto: AdjustmentEventDto,
-    @Headers('idempotency-key') idempotencyHeader?: string,
-    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
-  ) {
-    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processAdjustment(dto, key);
+    const key = idempotencyHeader || xIdempotencyHeader || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processPaymentEvent(envelope, key);
   }
 
   @Post('tolls')
@@ -123,7 +101,10 @@ export class ErpIntegrationController {
     @Headers('x-idempotency-key') xIdempotencyHeader?: string,
   ) {
     const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processToll(dto, key);
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processTollEvent(dto, key);
   }
 
   @Post('romaneios')
@@ -138,7 +119,10 @@ export class ErpIntegrationController {
     @Headers('x-idempotency-key') xIdempotencyHeader?: string,
   ) {
     const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processRomaneio(dto, key);
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processRomaneioEvent(dto, key);
   }
 
   @Post('events')
@@ -148,11 +132,14 @@ export class ErpIntegrationController {
   })
   @ApiResponse({ status: 200, description: 'Evento aceito e processado com sucesso' })
   async receiveEvent(
-    @Body() dto: GenericEventDto,
+    @Body() envelope: any,
     @Headers('idempotency-key') idempotencyHeader?: string,
     @Headers('x-idempotency-key') xIdempotencyHeader?: string,
   ) {
-    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
-    return this.erpService.processEvent(dto, key);
+    const key = idempotencyHeader || xIdempotencyHeader || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processGenericEvent(envelope, key);
   }
 }

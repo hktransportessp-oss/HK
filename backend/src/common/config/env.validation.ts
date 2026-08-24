@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 
 /**
  * HK Connect Backend - Environment Configuration & Validation
- * Build Version: 2026.08.24-v3
+ * Build Version: 2026.08.24-v4
  * Purpose: Strict validation of required runtime secrets and environment variables
  */
 
@@ -16,8 +16,8 @@ export interface AppConfig {
   JWT_REFRESH_EXPIRES_IN: string;
   CORS_ORIGIN?: string;
   ENABLE_SWAGGER?: boolean;
-  ERP_API_KEY?: string;
-  ERP_WEBHOOK_SECRET?: string;
+  ERP_API_KEY: string;
+  ERP_WEBHOOK_SECRET: string;
   HK_ERP_API_KEY?: string;
   HK_ERP_API_URL?: string;
 }
@@ -25,21 +25,25 @@ export interface AppConfig {
 export function validateEnvironment(): AppConfig {
   const logger = new Logger('EnvValidation');
 
+  const NODE_ENV =
+    (process.env.NODE_ENV as 'development' | 'production' | 'test') ||
+    'development';
+
+  const erpApiKey = (process.env.ERP_API_KEY || process.env.HK_ERP_API_KEY)?.trim() || '';
+  const erpWebhookSecret = process.env.ERP_WEBHOOK_SECRET?.trim() || '';
+
   // Diagnóstico seguro antes da validação estrita (sem expor valores sensíveis)
   console.log({
     DATABASE_URL_present: Boolean(process.env.DATABASE_URL),
     JWT_ACCESS_SECRET_present: Boolean(process.env.JWT_ACCESS_SECRET),
     JWT_REFRESH_SECRET_present: Boolean(process.env.JWT_REFRESH_SECRET),
-    ERP_API_KEY_present: Boolean(process.env.ERP_API_KEY || process.env.HK_ERP_API_KEY),
-    ERP_WEBHOOK_SECRET_present: Boolean(process.env.ERP_WEBHOOK_SECRET),
-    NODE_ENV: process.env.NODE_ENV,
+    ERP_API_KEY_present: Boolean(erpApiKey),
+    ERP_WEBHOOK_SECRET_present: Boolean(erpWebhookSecret),
+    NODE_ENV,
   });
 
   const errors: string[] = [];
 
-  const NODE_ENV =
-    (process.env.NODE_ENV as 'development' | 'production' | 'test') ||
-    'development';
   const rawPort = process.env.PORT || '3000';
   const PORT = parseInt(rawPort, 10);
 
@@ -113,6 +117,16 @@ export function validateEnvironment(): AppConfig {
     );
   }
 
+  // Validação estrita de ERP_API_KEY e ERP_WEBHOOK_SECRET em produção
+  if (NODE_ENV === 'production') {
+    if (!erpApiKey) {
+      errors.push('ERP_API_KEY (ou HK_ERP_API_KEY) é obrigatória em ambiente de produção para autenticação de integrações.');
+    }
+    if (!erpWebhookSecret) {
+      errors.push('ERP_WEBHOOK_SECRET é obrigatória em ambiente de produção para validação HMAC de Webhooks.');
+    }
+  }
+
   if (errors.length > 0) {
     logger.error(
       '❌ Falha crítica de inicialização: Configuração de variáveis de ambiente ausente ou inválida:',
@@ -127,9 +141,6 @@ export function validateEnvironment(): AppConfig {
     ` Configurações de ambiente validadas com sucesso (NODE_ENV: ${NODE_ENV}, PORT: ${PORT})`,
   );
 
-  const erpApiKey = process.env.ERP_API_KEY?.trim() || process.env.HK_ERP_API_KEY?.trim();
-  const erpWebhookSecret = process.env.ERP_WEBHOOK_SECRET?.trim();
-
   return {
     NODE_ENV,
     PORT,
@@ -140,9 +151,9 @@ export function validateEnvironment(): AppConfig {
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN?.trim() || '30d',
     CORS_ORIGIN: process.env.CORS_ORIGIN?.trim(),
     ENABLE_SWAGGER: process.env.ENABLE_SWAGGER === 'true',
-    ERP_API_KEY: erpApiKey,
-    ERP_WEBHOOK_SECRET: erpWebhookSecret,
-    HK_ERP_API_KEY: erpApiKey,
+    ERP_API_KEY: erpApiKey || 'dev_erp_api_key_local',
+    ERP_WEBHOOK_SECRET: erpWebhookSecret || 'dev_erp_webhook_secret_local',
+    HK_ERP_API_KEY: erpApiKey || 'dev_erp_api_key_local',
     HK_ERP_API_URL: process.env.HK_ERP_API_URL?.trim(),
   };
 }
