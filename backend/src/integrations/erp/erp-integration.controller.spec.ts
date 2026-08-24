@@ -8,6 +8,7 @@ import { NotFoundException } from '@nestjs/common';
 describe('ErpIntegrationController', () => {
   let controller: ErpIntegrationController;
   let service: ErpIntegrationService;
+  let moduleRef: TestingModule;
 
   const mockPrismaService = {
     $transaction: jest.fn().mockImplementation(async (callback) => {
@@ -83,7 +84,7 @@ describe('ErpIntegrationController', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       controllers: [ErpIntegrationController],
       providers: [
         ErpIntegrationService,
@@ -92,8 +93,8 @@ describe('ErpIntegrationController', () => {
       ],
     }).compile();
 
-    controller = module.get<ErpIntegrationController>(ErpIntegrationController);
-    service = module.get<ErpIntegrationService>(ErpIntegrationService);
+    controller = moduleRef.get<ErpIntegrationController>(ErpIntegrationController);
+    service = moduleRef.get<ErpIntegrationService>(ErpIntegrationService);
   });
 
   it('deve estar definido com todas as 7 rotas', () => {
@@ -280,7 +281,7 @@ describe('ErpIntegrationController', () => {
       settlementCode: 'SETTL-CACHED-001',
     };
 
-    const idempotencyService = module.get<IdempotencyService>(IdempotencyService);
+    const idempotencyService = moduleRef.get<IdempotencyService>(IdempotencyService);
     jest.spyOn(idempotencyService, 'getProcessedResponse').mockResolvedValueOnce(cachedResponse);
 
     const webhookEnvelope = {

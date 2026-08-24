@@ -13,6 +13,7 @@ describe('AuthService', () => {
     user: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
     },
     refreshToken: {
       create: jest.fn(),

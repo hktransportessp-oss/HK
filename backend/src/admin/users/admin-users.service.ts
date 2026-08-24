@@ -527,4 +527,67 @@ export class AdminUsersService {
       message: 'Usuário excluído com sucesso.',
     };
   }
+
+  async getDashboardStats() {
+    const [
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      totalDrivers,
+      erpOnlyDrivers,
+      totalVehicles,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.user.count({ where: { status: { in: ['INACTIVE', 'BLOCKED'] } } }),
+      this.prisma.driver.count(),
+      this.prisma.driver.count({ where: { userId: null } }),
+      this.prisma.vehicle.count(),
+    ]);
+
+    return {
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      totalDrivers,
+      erpOnlyDrivers,
+      totalVehicles,
+    };
+  }
+
+  async getUnlinkedDrivers() {
+    return this.prisma.driver.findMany({
+      where: { userId: null },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        trips: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: { tripCode: true, origin: true, destination: true },
+        },
+      },
+    });
+  }
+
+  async getDriversList() {
+    return this.prisma.driver.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
+            phone: true,
+            status: true,
+          },
+        },
+        assignments: {
+          where: { isCurrent: true },
+          include: { vehicle: true },
+          take: 1,
+        },
+      },
+    });
+  }
 }

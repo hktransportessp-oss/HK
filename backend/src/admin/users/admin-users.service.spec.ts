@@ -288,4 +288,40 @@ describe('AdminUsersService', () => {
     expect(mockPrisma.driver.delete).toHaveBeenCalledWith({ where: { id: 'driver-fresh' } });
     expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-fresh' } });
   });
+
+  it('deve retornar métricas corretas no dashboard stats', async () => {
+    mockPrisma.user.count = jest.fn()
+      .mockResolvedValueOnce(15) // totalUsers
+      .mockResolvedValueOnce(12) // activeUsers
+      .mockResolvedValueOnce(3); // inactiveUsers
+    mockPrisma.driver.count = jest.fn()
+      .mockResolvedValueOnce(10) // totalDrivers
+      .mockResolvedValueOnce(2); // erpOnlyDrivers
+    mockPrisma.vehicle.count = jest.fn().mockResolvedValueOnce(8); // totalVehicles
+
+    const stats = await service.getDashboardStats();
+
+    expect(stats).toEqual({
+      totalUsers: 15,
+      activeUsers: 12,
+      inactiveUsers: 3,
+      totalDrivers: 10,
+      erpOnlyDrivers: 2,
+      totalVehicles: 8,
+    });
+  });
+
+  it('deve listar motoristas ERP_ONLY sem usuário vinculado', async () => {
+    mockPrisma.driver.findMany = jest.fn().mockResolvedValue([
+      { id: 'drv-erp-1', cnh: '12345678900', userId: null, trips: [] },
+    ]);
+
+    const res = await service.getUnlinkedDrivers();
+
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe('drv-erp-1');
+    expect(mockPrisma.driver.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: null } }),
+    );
+  });
 });
