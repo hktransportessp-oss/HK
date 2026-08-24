@@ -12,8 +12,6 @@ import { TollsModule } from './tolls/tolls.module';
 import { FinanceModule } from './finance/finance.module';
 import { HealthModule } from './health/health.module';
 import { ErpIntegrationModule } from './integrations/erp/erp-integration.module';
-import { AdminModule } from './admin/admin.module';
-import { TrackingModule } from './tracking/tracking.module';
 
 @Module({
   imports: [
@@ -30,8 +28,6 @@ import { TrackingModule } from './tracking/tracking.module';
     FinanceModule,
     HealthModule,
     ErpIntegrationModule,
-    AdminModule,
-    TrackingModule,
   ],
 })
 export class AppModule {}

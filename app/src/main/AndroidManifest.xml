@@ -20,12 +20,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
 
-        <service
-            android:name=".service.LocationTrackingService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
