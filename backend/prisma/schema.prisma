@@ -86,14 +86,14 @@ model RefreshToken {
 
 model Driver {
   id          String                   @id @default(uuid())
-  userId      String                   @unique
-  cnh         String
-  cnhCategory String
+  userId      String?                  @unique
+  cnh         String?
+  cnhCategory String?
   rntrc       String?
   status      String                   @default("ATIVO")
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
-  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
   assignments DriverVehicleAssignment[]
   trips       Trip[]
   romaneios   Romaneio[]

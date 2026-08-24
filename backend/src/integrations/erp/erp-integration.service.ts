@@ -27,6 +27,7 @@ export class ErpIntegrationService {
   /**
    * Resolução DETERMINÍSTICA do motorista a partir de driver.id ou driver.document (normalizado).
    * NUNCA utiliza fallbacks para motoristas aleatórios ou primeiros ativos.
+   * Se não existir no banco e driver.id for informado pelo ERP, cria o registro ERP-only deterministicamente.
    */
   private async resolveDriverIdDeterministic(
     driverInfo?: { id?: string; document?: string; cpf?: string; name?: string; pix?: string },
@@ -40,7 +41,7 @@ export class ErpIntegrationService {
       );
     }
 
-    // 1. Busca direta por Driver ID
+    // A) 1. Busca direta por Driver ID
     if (driverInfo.id) {
       const driver = await db.driver.findUnique({
         where: { id: driverInfo.id },
@@ -48,7 +49,7 @@ export class ErpIntegrationService {
       if (driver) return driver.id;
     }
 
-    // 2. Busca determinística por Documento (CPF/CNPJ normalizado)
+    // B) 2. Busca determinística por Documento (CPF/CNPJ normalizado)
     const rawDoc = driverInfo.document || driverInfo.cpf;
     if (rawDoc) {
       const cleanDoc = rawDoc.replace(/\D/g, '');
@@ -82,9 +83,28 @@ export class ErpIntegrationService {
       }
     }
 
-    // Se não encontrado deterministicamente, REJEITA OBRIGATORIAMENTE sem alterar o banco
+    // C) 3. Se ainda não existir E driver.id tiver sido fornecido pelo ERP:
+    // Cria/upsert um Driver ERP-only deterministicamente
+    if (driverInfo.id) {
+      const createdDriver = await db.driver.upsert({
+        where: { id: driverInfo.id },
+        update: {},
+        create: {
+          id: driverInfo.id,
+          userId: null,
+          cnh: null,
+          cnhCategory: null,
+          status: 'ERP_ONLY',
+        },
+      });
+
+      this.logger.log(`Motorista ERP-only criado deterministicamente: ${createdDriver.id}`);
+      return createdDriver.id;
+    }
+
+    // Se não encontrado deterministicamente e nenhum driver.id foi informado para provisionar ERP_ONLY:
     throw new NotFoundException(
-      `Motorista não encontrado deterministicamente no cadastro HK Central (Documento: ${driverInfo.document || driverInfo.cpf || 'N/A'}, ID: ${driverInfo.id || 'N/A'}). Registro cancelado por segurança financeira.`,
+      `Motorista não encontrado deterministicamente no cadastro HK Central (Documento: ${driverInfo.document || driverInfo.cpf || 'N/A'}). Registro cancelado por segurança financeira.`,
     );
   }
 
