@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 
 /**
  * HK Connect Backend - Environment Configuration & Validation
- * Build Version: 2026.08.18-v2
+ * Build Version: 2026.08.24-v3
  * Purpose: Strict validation of required runtime secrets and environment variables
  */
 
@@ -17,6 +17,8 @@ export interface AppConfig {
   CORS_ORIGIN?: string;
   ENABLE_SWAGGER?: boolean;
   ERP_API_KEY?: string;
+  ERP_WEBHOOK_SECRET?: string;
+  HK_ERP_API_KEY?: string;
   HK_ERP_API_URL?: string;
 }
 
@@ -28,6 +30,8 @@ export function validateEnvironment(): AppConfig {
     DATABASE_URL_present: Boolean(process.env.DATABASE_URL),
     JWT_ACCESS_SECRET_present: Boolean(process.env.JWT_ACCESS_SECRET),
     JWT_REFRESH_SECRET_present: Boolean(process.env.JWT_REFRESH_SECRET),
+    ERP_API_KEY_present: Boolean(process.env.ERP_API_KEY || process.env.HK_ERP_API_KEY),
+    ERP_WEBHOOK_SECRET_present: Boolean(process.env.ERP_WEBHOOK_SECRET),
     NODE_ENV: process.env.NODE_ENV,
   });
 
@@ -56,7 +60,7 @@ export function validateEnvironment(): AppConfig {
 
   if (!DATABASE_URL) {
     errors.push(
-      'DATABASE_URL é obrigatória e não foi encontrada em process.env. Configure a connection string do PostgreSQL no painel do Coolify.',
+      'DATABASE_URL é obrigatória e não foi encontrada em process.env. Configure a connection string do PostgreSQL no painel do Coolify/Railway.',
     );
   } else if (
     !DATABASE_URL.startsWith('postgresql://') &&
@@ -80,7 +84,7 @@ export function validateEnvironment(): AppConfig {
 
   if (!JWT_ACCESS_SECRET) {
     errors.push(
-      'JWT_ACCESS_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify.',
+      'JWT_ACCESS_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify/Railway.',
     );
   } else if (JWT_ACCESS_SECRET.length < 16) {
     errors.push(
@@ -101,7 +105,7 @@ export function validateEnvironment(): AppConfig {
 
   if (!JWT_REFRESH_SECRET) {
     errors.push(
-      'JWT_REFRESH_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify.',
+      'JWT_REFRESH_SECRET é obrigatória em ambiente de produção. Cadastre esta variável no painel do Coolify/Railway.',
     );
   } else if (JWT_REFRESH_SECRET.length < 16) {
     errors.push(
@@ -111,17 +115,20 @@ export function validateEnvironment(): AppConfig {
 
   if (errors.length > 0) {
     logger.error(
-      '❌ Falha crítica de inicialização: Configuração de variáveis de ambiente ausente ou inválida no Coolify:',
+      '❌ Falha crítica de inicialização: Configuração de variáveis de ambiente ausente ou inválida:',
     );
     errors.forEach((err) => logger.error(`  👉 ${err}`));
     throw new Error(
-      `Falha de inicialização: ${errors.length} erro(s) de configuração de ambiente. Verifique as variáveis no painel do Coolify.`,
+      `Falha de inicialização: ${errors.length} erro(s) de configuração de ambiente. Verifique as variáveis no painel da hospedagem.`,
     );
   }
 
   logger.log(
     ` Configurações de ambiente validadas com sucesso (NODE_ENV: ${NODE_ENV}, PORT: ${PORT})`,
   );
+
+  const erpApiKey = process.env.ERP_API_KEY?.trim() || process.env.HK_ERP_API_KEY?.trim();
+  const erpWebhookSecret = process.env.ERP_WEBHOOK_SECRET?.trim();
 
   return {
     NODE_ENV,
@@ -133,7 +140,9 @@ export function validateEnvironment(): AppConfig {
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN?.trim() || '30d',
     CORS_ORIGIN: process.env.CORS_ORIGIN?.trim(),
     ENABLE_SWAGGER: process.env.ENABLE_SWAGGER === 'true',
-    ERP_API_KEY: process.env.HK_ERP_API_KEY?.trim() || process.env.ERP_API_KEY?.trim(),
+    ERP_API_KEY: erpApiKey,
+    ERP_WEBHOOK_SECRET: erpWebhookSecret,
+    HK_ERP_API_KEY: erpApiKey,
     HK_ERP_API_URL: process.env.HK_ERP_API_URL?.trim(),
   };
 }

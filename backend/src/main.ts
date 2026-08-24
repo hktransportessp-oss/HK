@@ -17,8 +17,9 @@ async function bootstrap() {
     // 1. Validação estrita de variáveis de ambiente antes da inicialização
     const config = validateEnvironment();
 
-    // 2. Instanciação da aplicação NestJS
+    // 2. Instanciação da aplicação NestJS com suporte a rawBody para HMAC Webhooks
     const app = await NestFactory.create(AppModule, {
+      rawBody: true,
       logger:
         config.NODE_ENV === 'production'
           ? ['error', 'warn', 'log']

@@ -11,6 +11,7 @@ import { RomaneiosModule } from './romaneios/romaneios.module';
 import { TollsModule } from './tolls/tolls.module';
 import { FinanceModule } from './finance/finance.module';
 import { HealthModule } from './health/health.module';
+import { ErpIntegrationModule } from './integrations/erp/erp-integration.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { HealthModule } from './health/health.module';
     TollsModule,
     FinanceModule,
     HealthModule,
+    ErpIntegrationModule,
   ],
 })
 export class AppModule {}
