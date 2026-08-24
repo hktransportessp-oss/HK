@@ -12,6 +12,7 @@ import { TollsModule } from './tolls/tolls.module';
 import { FinanceModule } from './finance/finance.module';
 import { HealthModule } from './health/health.module';
 import { ErpIntegrationModule } from './integrations/erp/erp-integration.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ErpIntegrationModule } from './integrations/erp/erp-integration.module'
     FinanceModule,
     HealthModule,
     ErpIntegrationModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
