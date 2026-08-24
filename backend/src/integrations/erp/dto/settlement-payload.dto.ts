@@ -43,10 +43,15 @@ export class ErpDriverInfoDto {
 }
 
 export class ErpVehicleInfoDto {
-  @ApiPropertyOptional({ example: 'ABC1D23' })
+  @ApiProperty({ example: 'ABC1D23', description: 'Placa do veículo' })
+  @IsString()
+  @IsNotEmpty()
+  plate: string;
+
+  @ApiPropertyOptional({ example: 'Scania R450 - Cavalo Mecânico', description: 'Descrição ou modelo do veículo' })
   @IsOptional()
   @IsString()
-  plate?: string;
+  description?: string;
 
   @ApiPropertyOptional({ example: 'Scania R450' })
   @IsOptional()

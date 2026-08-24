@@ -121,6 +121,7 @@ describe('ErpIntegrationController', () => {
         },
         vehicle: {
           plate: 'ABC1D23',
+          description: 'Scania R450 - Cavalo Mecânico',
         },
         periodStart: '2026-08-01',
         periodEnd: '2026-08-15',
