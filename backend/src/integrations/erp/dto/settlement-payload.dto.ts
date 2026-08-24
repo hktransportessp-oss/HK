@@ -11,15 +11,25 @@ import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ErpDriverInfoDto {
-  @ApiPropertyOptional({ example: '12345678901', description: 'CPF do motorista para resolução determinística' })
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', description: 'ID do motorista no HK Central / ERP' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @ApiPropertyOptional({ example: '123.456.789-01', description: 'CPF ou CNPJ do motorista para resolução determinística' })
+  @IsOptional()
+  @IsString()
+  document?: string;
+
+  @ApiPropertyOptional({ example: '12345678901' })
   @IsOptional()
   @IsString()
   cpf?: string;
 
-  @ApiPropertyOptional({ description: 'ID interno do motorista no banco HK Central' })
+  @ApiPropertyOptional({ example: '12345678901', description: 'Chave PIX cadastrada no ERP' })
   @IsOptional()
   @IsString()
-  id?: string;
+  pix?: string;
 
   @ApiPropertyOptional({ example: 'João da Silva' })
   @IsOptional()

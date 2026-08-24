@@ -22,6 +22,12 @@ import {
 import {
   ErpPaymentWebhookDto,
 } from './dto/payment-payload.dto';
+import {
+  ErpReceiptWebhookDto,
+} from './dto/receipt-payload.dto';
+import {
+  ErpAdjustmentWebhookDto,
+} from './dto/adjustment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
 
@@ -51,6 +57,9 @@ import { RomaneioEventDto } from './dto/romaneio-event.dto';
 export class ErpIntegrationController {
   constructor(private readonly erpService: ErpIntegrationService) {}
 
+  /**
+   * 1. POST /api/v1/integrations/erp/settlements
+   */
   @Post('settlements')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -70,6 +79,9 @@ export class ErpIntegrationController {
     return this.erpService.processSettlementEvent(envelope, key);
   }
 
+  /**
+   * 2. POST /api/v1/integrations/erp/payments
+   */
   @Post('payments')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -89,6 +101,53 @@ export class ErpIntegrationController {
     return this.erpService.processPaymentEvent(envelope, key);
   }
 
+  /**
+   * 3. POST /api/v1/integrations/erp/receipts
+   */
+  @Post('receipts')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Recebe comprovantes e recibos validados pelo ERP (pedágio, despesas, etc.)',
+    description: 'Vincula comprovantes de pedágio e abastecimento às entidades correspondentes no HK Central.',
+  })
+  @ApiResponse({ status: 200, description: 'Comprovante processado com sucesso' })
+  async receiveReceipt(
+    @Body() envelope: ErpReceiptWebhookDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
+  ) {
+    const key = idempotencyHeader || xIdempotencyHeader || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processReceiptEvent(envelope, key);
+  }
+
+  /**
+   * 4. POST /api/v1/integrations/erp/adjustments
+   */
+  @Post('adjustments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Recebe eventos adjustment.created (bônus, descontos, acréscimos) do ERP',
+    description: 'Aplica ajustes discriminados ao fechamento e recalcula o montante líquido.',
+  })
+  @ApiResponse({ status: 200, description: 'Ajuste financeiro processado com sucesso' })
+  async receiveAdjustment(
+    @Body() envelope: ErpAdjustmentWebhookDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
+  ) {
+    const key = idempotencyHeader || xIdempotencyHeader || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processAdjustmentEvent(envelope, key);
+  }
+
+  /**
+   * 5. POST /api/v1/integrations/erp/tolls
+   */
   @Post('tolls')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -107,6 +166,9 @@ export class ErpIntegrationController {
     return this.erpService.processTollEvent(dto, key);
   }
 
+  /**
+   * 6. POST /api/v1/integrations/erp/romaneios
+   */
   @Post('romaneios')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -125,6 +187,9 @@ export class ErpIntegrationController {
     return this.erpService.processRomaneioEvent(dto, key);
   }
 
+  /**
+   * 7. POST /api/v1/integrations/erp/events
+   */
   @Post('events')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

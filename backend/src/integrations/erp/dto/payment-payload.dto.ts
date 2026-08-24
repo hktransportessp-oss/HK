@@ -16,15 +16,15 @@ export class PaymentPayloadDto {
   @IsNotEmpty()
   externalId: string;
 
-  @ApiProperty({ example: 'SETTL-2026-08-001', description: 'Código do fechamento financeiro associado' })
-  @IsString()
-  @IsNotEmpty()
-  settlementCode: string;
-
-  @ApiPropertyOptional({ description: 'ID interno do fechamento financeiro' })
+  @ApiPropertyOptional({ example: 'SETTL-2026-08-001', description: 'ID ou código do fechamento financeiro associado' })
   @IsOptional()
   @IsString()
   settlementId?: string;
+
+  @ApiPropertyOptional({ example: 'SETTL-2026-08-001', description: 'Código do fechamento financeiro associado' })
+  @IsOptional()
+  @IsString()
+  settlementCode?: string;
 
   @ApiPropertyOptional({ type: ErpDriverInfoDto })
   @IsOptional()
@@ -40,7 +40,17 @@ export class PaymentPayloadDto {
   @ApiPropertyOptional({ example: '2026-08-16T14:30:00.000Z' })
   @IsOptional()
   @IsString()
+  paidAt?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-16T14:30:00.000Z' })
+  @IsOptional()
+  @IsString()
   paymentDate?: string;
+
+  @ApiPropertyOptional({ example: 'PIX', description: 'PIX, TED, TRANSFERENCIA, BOLETO' })
+  @IsOptional()
+  @IsString()
+  method?: string;
 
   @ApiPropertyOptional({ example: 'PIX', description: 'PIX, TED, TRANSFERENCIA, BOLETO' })
   @IsOptional()
@@ -56,6 +66,11 @@ export class PaymentPayloadDto {
   @IsOptional()
   @IsString()
   transactionId?: string;
+
+  @ApiPropertyOptional({ example: 'https://storage.hktransportes.com.br/receipts/pix-20260816.pdf' })
+  @IsOptional()
+  @IsString()
+  proofUrl?: string;
 
   @ApiPropertyOptional({ example: 'https://storage.hktransportes.com.br/receipts/pix-20260816.pdf' })
   @IsOptional()

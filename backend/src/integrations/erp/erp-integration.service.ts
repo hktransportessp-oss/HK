@@ -9,6 +9,8 @@ import { IdempotencyService } from './services/idempotency.service';
 import { ErpSettlementWebhookDto } from './dto/erp-webhook-envelope.dto';
 import { SettlementPayloadDto } from './dto/settlement-payload.dto';
 import { ErpPaymentWebhookDto, PaymentPayloadDto } from './dto/payment-payload.dto';
+import { ErpReceiptWebhookDto, ReceiptPayloadDto } from './dto/receipt-payload.dto';
+import { ErpAdjustmentWebhookDto, AdjustmentPayloadDto } from './dto/adjustment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
 import { TollStatus, RomaneioStatus } from '@prisma/client';
@@ -23,18 +25,18 @@ export class ErpIntegrationService {
   ) {}
 
   /**
-   * Resolução DETERMINÍSTICA e segura do motorista.
+   * Resolução DETERMINÍSTICA do motorista a partir de driver.id ou driver.document (normalizado).
    * NUNCA utiliza fallbacks para motoristas aleatórios ou primeiros ativos.
    */
   private async resolveDriverIdDeterministic(
-    driverInfo?: { id?: string; cpf?: string; name?: string },
+    driverInfo?: { id?: string; document?: string; cpf?: string; name?: string; pix?: string },
     prismaClient?: any,
   ): Promise<string> {
     const db = prismaClient || this.prisma;
 
-    if (!driverInfo || (!driverInfo.id && !driverInfo.cpf)) {
+    if (!driverInfo || (!driverInfo.id && !driverInfo.document && !driverInfo.cpf)) {
       throw new BadRequestException(
-        'Dados de identificação do motorista ausentes (id ou cpf são obrigatórios)',
+        'Dados de identificação do motorista ausentes (id ou document são obrigatórios)',
       );
     }
 
@@ -46,14 +48,15 @@ export class ErpIntegrationService {
       if (driver) return driver.id;
     }
 
-    // 2. Busca determinística por CPF
-    if (driverInfo.cpf) {
-      const cleanCpf = driverInfo.cpf.replace(/\D/g, '');
+    // 2. Busca determinística por Documento (CPF/CNPJ normalizado)
+    const rawDoc = driverInfo.document || driverInfo.cpf;
+    if (rawDoc) {
+      const cleanDoc = rawDoc.replace(/\D/g, '');
       const user = await db.user.findFirst({
         where: {
           OR: [
-            { cpf: cleanCpf },
-            { cpf: driverInfo.cpf },
+            { cpf: cleanDoc },
+            { cpf: rawDoc },
           ],
         },
         include: { driver: true },
@@ -63,13 +66,12 @@ export class ErpIntegrationService {
         return user.driver.id;
       }
 
-      // Tenta buscar no motorista diretamente caso haja campo de CPF ou similar
       const driverByUserId = await db.driver.findFirst({
         where: {
           user: {
             OR: [
-              { cpf: cleanCpf },
-              { cpf: driverInfo.cpf },
+              { cpf: cleanDoc },
+              { cpf: rawDoc },
             ],
           },
         },
@@ -82,7 +84,7 @@ export class ErpIntegrationService {
 
     // Se não encontrado deterministicamente, REJEITA OBRIGATORIAMENTE sem alterar o banco
     throw new NotFoundException(
-      `Motorista não encontrado deterministicamente no cadastro HK Central (CPF: ${driverInfo.cpf || 'N/A'}, ID: ${driverInfo.id || 'N/A'}). Registro cancelado por segurança financeira.`,
+      `Motorista não encontrado deterministicamente no cadastro HK Central (Documento: ${driverInfo.document || driverInfo.cpf || 'N/A'}, ID: ${driverInfo.id || 'N/A'}). Registro cancelado por segurança financeira.`,
     );
   }
 
@@ -97,40 +99,53 @@ export class ErpIntegrationService {
   }
 
   /**
+   * Helper para desempacotar envelope se necessário
+   */
+  private unwrapPayload<T>(payloadOrEnvelope: any): { data: T; idempotencyKey?: string; event?: string; occurredAt?: string } {
+    if (payloadOrEnvelope && payloadOrEnvelope.data && typeof payloadOrEnvelope.data === 'object') {
+      return {
+        data: payloadOrEnvelope.data,
+        idempotencyKey: payloadOrEnvelope.idempotencyKey,
+        event: payloadOrEnvelope.event,
+        occurredAt: payloadOrEnvelope.occurredAt,
+      };
+    }
+    return {
+      data: payloadOrEnvelope,
+      idempotencyKey: payloadOrEnvelope?.idempotencyKey,
+      event: payloadOrEnvelope?.event,
+      occurredAt: payloadOrEnvelope?.occurredAt,
+    };
+  }
+
+  /**
    * Processa Webhooks de Fechamento Financeiro: settlement.created e settlement.updated
-   * Executado de forma estritamente TRANSACIONAL no PostgreSQL com registro atômico de idempotência.
+   * 1. POST /api/v1/integrations/erp/settlements
    */
   async processSettlementEvent(
-    envelope: ErpSettlementWebhookDto,
+    envelopeOrPayload: ErpSettlementWebhookDto | SettlementPayloadDto,
     headerIdempotencyKey?: string,
   ) {
-    const key = headerIdempotencyKey || envelope.idempotencyKey;
+    const { data, idempotencyKey: bodyKey, event, occurredAt } = this.unwrapPayload<SettlementPayloadDto>(envelopeOrPayload);
+    const key = headerIdempotencyKey || bodyKey;
+
     if (!key) {
       throw new BadRequestException('Chave de idempotência ausente');
     }
 
-    // 1. Verificação prévia de Idempotência no PostgreSQL
     const cached = await this.idempotencyService.getProcessedResponse(key);
     if (cached) {
       return cached;
     }
 
-    const data: SettlementPayloadDto = envelope.data;
     if (!data || !data.externalId) {
-      throw new BadRequestException('Payload de dados do fechamento inválido ou externalId ausente');
+      throw new BadRequestException('Payload de fechamento inválido ou externalId ausente');
     }
 
-    this.logger.log(
-      `[ERP ${envelope.event}] Processando fechamento ${data.externalId} para o motorista CPF: ${data.driver?.cpf || data.driver?.id}`,
-    );
-
-    // 2. Execução Atômica e Transacional
     const result = await this.prisma.$transaction(async (tx) => {
-      // Resolução determinística do motorista dentro da transação
       const driverId = await this.resolveDriverIdDeterministic(data.driver, tx);
       const tripId = await this.resolveTripId(data.internalId, tx);
 
-      // Calcular montantes com base no payload e itens
       let freightAmount = 0;
       let tollAmount = 0;
       let additionalAmount = 0;
@@ -152,14 +167,12 @@ export class ErpIntegrationService {
         }
       }
 
-      // Se grossAmount for fornecido e frete não estiver discriminado, atribui ao frete
       if (freightAmount === 0 && data.grossAmount) {
         freightAmount = data.grossAmount;
       }
 
       const netAmount = Number(data.netAmount) || (freightAmount + tollAmount + additionalAmount - deductionsAmount);
 
-      // Upsert do fechamento financeiro
       const settlement = await tx.financialSettlement.upsert({
         where: { settlementCode: data.externalId },
         update: {
@@ -189,7 +202,6 @@ export class ErpIntegrationService {
         },
       });
 
-      // Substituição atômica dos itens discriminados
       await tx.financialSettlementItem.deleteMany({
         where: { settlementId: settlement.id },
       });
@@ -207,17 +219,16 @@ export class ErpIntegrationService {
 
       const responsePayload = {
         success: true,
-        event: envelope.event,
-        action: envelope.event === 'settlement.created' ? 'CREATED' : 'UPDATED',
+        event: event || 'settlement.created',
+        action: (event === 'settlement.updated') ? 'UPDATED' : 'CREATED',
         settlementId: settlement.id,
         settlementCode: settlement.settlementCode,
         netAmount: settlement.netAmount,
         status: settlement.status,
-        occurredAt: envelope.occurredAt,
+        occurredAt: occurredAt || new Date().toISOString(),
         processedAt: new Date().toISOString(),
       };
 
-      // Gravação atômica da chave de idempotência dentro da mesma transação
       await this.idempotencyService.recordResponse(
         key,
         responsePayload,
@@ -232,13 +243,16 @@ export class ErpIntegrationService {
   }
 
   /**
-   * Processa Webhook de Pagamento: payment.confirmed
+   * Processa Webhooks de Pagamento: payment.confirmed
+   * 2. POST /api/v1/integrations/erp/payments
    */
   async processPaymentEvent(
-    envelope: ErpPaymentWebhookDto,
+    envelopeOrPayload: ErpPaymentWebhookDto | PaymentPayloadDto,
     headerIdempotencyKey?: string,
   ) {
-    const key = headerIdempotencyKey || envelope.idempotencyKey;
+    const { data, idempotencyKey: bodyKey, event, occurredAt } = this.unwrapPayload<PaymentPayloadDto>(envelopeOrPayload);
+    const key = headerIdempotencyKey || bodyKey;
+
     if (!key) {
       throw new BadRequestException('Chave de idempotência ausente');
     }
@@ -248,42 +262,50 @@ export class ErpIntegrationService {
       return cached;
     }
 
-    const data: PaymentPayloadDto = envelope.data;
-    if (!data || (!data.settlementCode && !data.settlementId)) {
-      throw new BadRequestException('Código ou ID do fechamento ausente no evento de pagamento');
+    if (!data || (!data.settlementId && !data.settlementCode && !data.externalId)) {
+      throw new BadRequestException('Identificador do fechamento ou pagamento ausente');
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
       let settlement = null;
-      if (data.settlementCode) {
-        settlement = await tx.financialSettlement.findUnique({
-          where: { settlementCode: data.settlementCode },
-        });
-      } else if (data.settlementId) {
-        settlement = await tx.financialSettlement.findUnique({
-          where: { id: data.settlementId },
+      const targetSettlementCode = data.settlementCode || data.settlementId;
+
+      if (targetSettlementCode) {
+        settlement = await tx.financialSettlement.findFirst({
+          where: {
+            OR: [
+              { settlementCode: targetSettlementCode },
+              { id: targetSettlementCode },
+            ],
+          },
         });
       }
 
       if (!settlement) {
         throw new NotFoundException(
-          `Fechamento financeiro "${data.settlementCode || data.settlementId}" não localizado para registrar pagamento`,
+          `Fechamento financeiro "${targetSettlementCode}" não localizado para registrar pagamento`,
         );
       }
+
+      const paymentDateRaw = data.paidAt || data.paymentDate;
+      const paymentDate = paymentDateRaw ? new Date(paymentDateRaw) : new Date();
+      const method = data.method || data.paymentMethod || 'PIX';
+      const receiptUrl = data.proofUrl || data.receiptUrl || null;
+      const status = data.status || 'PAID';
 
       const payment = await tx.payment.create({
         data: {
           settlementId: settlement.id,
           amount: Number(data.amount) || 0,
-          paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
-          paymentMethod: data.paymentMethod || 'PIX',
-          status: data.status || 'PAID',
+          paymentDate,
+          paymentMethod: method,
+          status,
           transactionId: data.transactionId || data.externalId || null,
-          receiptUrl: data.receiptUrl || null,
+          receiptUrl,
         },
       });
 
-      if (data.status === 'PAID' || !data.status) {
+      if (status === 'PAID') {
         await tx.financialSettlement.update({
           where: { id: settlement.id },
           data: { status: 'PAID' },
@@ -292,14 +314,14 @@ export class ErpIntegrationService {
 
       const responsePayload = {
         success: true,
-        event: envelope.event,
+        event: event || 'payment.confirmed',
         action: 'PAYMENT_RECORDED',
         paymentId: payment.id,
         settlementCode: settlement.settlementCode,
         amount: payment.amount,
         paymentStatus: payment.status,
         transactionId: payment.transactionId,
-        occurredAt: envelope.occurredAt,
+        occurredAt: occurredAt || new Date().toISOString(),
         processedAt: new Date().toISOString(),
       };
 
@@ -317,43 +339,216 @@ export class ErpIntegrationService {
   }
 
   /**
-   * Sincronização de Pedágios validados no ERP
+   * Processa Webhooks de Comprovantes: receipt.verified / receipt.uploaded
+   * 3. POST /api/v1/integrations/erp/receipts
    */
-  async processTollEvent(dto: TollEventDto, idempotencyKey: string) {
-    const cached = await this.idempotencyService.getProcessedResponse(idempotencyKey);
+  async processReceiptEvent(
+    envelopeOrPayload: ErpReceiptWebhookDto | ReceiptPayloadDto,
+    headerIdempotencyKey?: string,
+  ) {
+    const { data, idempotencyKey: bodyKey, event, occurredAt } = this.unwrapPayload<ReceiptPayloadDto>(envelopeOrPayload);
+    const key = headerIdempotencyKey || bodyKey;
+
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
+    const cached = await this.idempotencyService.getProcessedResponse(key);
+    if (cached) return cached;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const fileUrl = data.receiptUrl || data.fileUrl;
+      let updatedEntity: any = null;
+
+      if (data.type === 'TOLL' && data.entityId) {
+        const toll = await tx.toll.findUnique({ where: { id: data.entityId } });
+        if (toll) {
+          updatedEntity = await tx.toll.update({
+            where: { id: toll.id },
+            data: {
+              receiptUrl: fileUrl || toll.receiptUrl,
+              status: data.status === 'VERIFIED' ? TollStatus.APPROVED : toll.status,
+              notes: data.notes || toll.notes,
+            },
+          });
+        }
+      }
+
+      const responsePayload = {
+        success: true,
+        event: event || 'receipt.verified',
+        action: 'RECEIPT_PROCESSED',
+        externalId: data.externalId,
+        type: data.type,
+        entityId: data.entityId,
+        status: data.status || 'VERIFIED',
+        updated: Boolean(updatedEntity),
+        occurredAt: occurredAt || new Date().toISOString(),
+        processedAt: new Date().toISOString(),
+      };
+
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/receipts`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
+  }
+
+  /**
+   * Processa Webhooks de Ajustes Financeiros: adjustment.created
+   * 4. POST /api/v1/integrations/erp/adjustments
+   */
+  async processAdjustmentEvent(
+    envelopeOrPayload: ErpAdjustmentWebhookDto | AdjustmentPayloadDto,
+    headerIdempotencyKey?: string,
+  ) {
+    const { data, idempotencyKey: bodyKey, event, occurredAt } = this.unwrapPayload<AdjustmentPayloadDto>(envelopeOrPayload);
+    const key = headerIdempotencyKey || bodyKey;
+
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
+    const cached = await this.idempotencyService.getProcessedResponse(key);
+    if (cached) return cached;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      let settlement = null;
+      if (data.settlementId) {
+        settlement = await tx.financialSettlement.findFirst({
+          where: {
+            OR: [
+              { id: data.settlementId },
+              { settlementCode: data.settlementId },
+            ],
+          },
+        });
+      }
+
+      let createdItem = null;
+      if (settlement) {
+        createdItem = await tx.financialSettlementItem.create({
+          data: {
+            settlementId: settlement.id,
+            description: data.description || `Ajuste ${data.externalId}`,
+            type: (data.type || 'BONUS').toUpperCase(),
+            amount: Number(data.amount) || 0,
+          },
+        });
+
+        // Recalcular saldo líquido do fechamento
+        const allItems = await tx.financialSettlementItem.findMany({
+          where: { settlementId: settlement.id },
+        });
+
+        let freight = 0;
+        let toll = 0;
+        let additionals = 0;
+        let deductions = 0;
+
+        for (const it of allItems) {
+          const t = it.type.toUpperCase();
+          const a = Number(it.amount) || 0;
+          if (t === 'FREIGHT') freight += a;
+          else if (t === 'TOLL') toll += a;
+          else if (t === 'BONUS' || t === 'CREDIT' || t === 'ADDITIONAL') additionals += a;
+          else if (t === 'DISCOUNT' || t === 'DEBIT' || t === 'DEDUCTION') deductions += Math.abs(a);
+        }
+
+        const netAmount = freight + toll + additionals - deductions;
+
+        await tx.financialSettlement.update({
+          where: { id: settlement.id },
+          data: {
+            freightAmount: freight,
+            tollAmount: toll,
+            additionalAmount: additionals,
+            deductionsAmount: deductions,
+            netAmount,
+          },
+        });
+      }
+
+      const responsePayload = {
+        success: true,
+        event: event || 'adjustment.created',
+        action: 'ADJUSTMENT_RECORDED',
+        externalId: data.externalId,
+        adjustmentItemId: createdItem?.id || null,
+        settlementId: settlement?.id || null,
+        amount: Number(data.amount) || 0,
+        occurredAt: occurredAt || new Date().toISOString(),
+        processedAt: new Date().toISOString(),
+      };
+
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/adjustments`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
+  }
+
+  /**
+   * Sincronização de Pedágios
+   * 5. POST /api/v1/integrations/erp/tolls
+   */
+  async processTollEvent(dtoOrEnvelope: any, headerIdempotencyKey?: string) {
+    const { data, idempotencyKey: bodyKey } = this.unwrapPayload<any>(dtoOrEnvelope);
+    const key = headerIdempotencyKey || bodyKey || data.idempotencyKey;
+
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
+    const cached = await this.idempotencyService.getProcessedResponse(key);
     if (cached) return cached;
 
     const result = await this.prisma.$transaction(async (tx) => {
       let toll = null;
-      if (dto.tollId) {
-        toll = await tx.toll.findUnique({ where: { id: dto.tollId } });
+      const tollTargetId = data.tollId || data.externalId;
+
+      if (tollTargetId) {
+        toll = await tx.toll.findUnique({ where: { id: tollTargetId } });
       }
 
       if (toll) {
         toll = await tx.toll.update({
           where: { id: toll.id },
           data: {
-            status: dto.status || TollStatus.APPROVED,
-            notes: dto.notes || toll.notes,
+            status: data.status || TollStatus.APPROVED,
+            notes: data.notes || toll.notes,
+            receiptUrl: data.receiptUrl || toll.receiptUrl,
           },
         });
       } else {
         const driverId = await this.resolveDriverIdDeterministic(
-          { id: dto.driverId, cpf: dto.driverCpf },
+          data.driver || { id: data.driverId, document: data.driverCpf, cpf: data.driverCpf },
           tx,
         );
 
         toll = await tx.toll.create({
           data: {
             driverId,
-            tripId: dto.tripId || null,
-            amount: dto.amount ?? 0,
-            date: dto.date || new Date().toISOString().split('T')[0],
-            plaza: dto.plaza || 'Praça de Pedágio',
-            highway: dto.highway || 'Rodovia',
-            receiptUrl: dto.receiptUrl || null,
-            notes: dto.notes,
-            status: dto.status || TollStatus.APPROVED,
+            tripId: data.tripId || null,
+            amount: Number(data.amount) || 0,
+            date: data.date || new Date().toISOString().split('T')[0],
+            plaza: data.plaza || 'Praça de Pedágio',
+            highway: data.highway || 'Rodovia',
+            receiptUrl: data.receiptUrl || null,
+            notes: data.notes,
+            status: data.status || TollStatus.APPROVED,
           },
         });
       }
@@ -367,7 +562,7 @@ export class ErpIntegrationService {
       };
 
       await this.idempotencyService.recordResponse(
-        idempotencyKey,
+        key,
         responsePayload,
         `/api/v1/integrations/erp/tolls`,
         tx,
@@ -380,40 +575,48 @@ export class ErpIntegrationService {
   }
 
   /**
-   * Sincronização de Romaneios validados no ERP
+   * Sincronização de Romaneios
+   * 6. POST /api/v1/integrations/erp/romaneios
    */
-  async processRomaneioEvent(dto: RomaneioEventDto, idempotencyKey: string) {
-    const cached = await this.idempotencyService.getProcessedResponse(idempotencyKey);
+  async processRomaneioEvent(dtoOrEnvelope: any, headerIdempotencyKey?: string) {
+    const { data, idempotencyKey: bodyKey } = this.unwrapPayload<any>(dtoOrEnvelope);
+    const key = headerIdempotencyKey || bodyKey || data.idempotencyKey;
+
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
+    const cached = await this.idempotencyService.getProcessedResponse(key);
     if (cached) return cached;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const driverId = await this.resolveDriverIdDeterministic(
-        { id: dto.driverId, cpf: dto.driverCpf },
+        data.driver || { id: data.driverId, document: data.driverCpf, cpf: data.driverCpf },
         tx,
       );
-      const tripId = await this.resolveTripId(dto.tripId, tx);
+      const tripId = await this.resolveTripId(data.tripId, tx);
 
       const romaneio = await tx.romaneio.upsert({
-        where: { romaneioCode: dto.romaneioCode },
+        where: { romaneioCode: data.romaneioCode },
         update: {
-          status: dto.status || RomaneioStatus.APPROVED,
-          notes: dto.notes,
+          status: data.status || RomaneioStatus.APPROVED,
+          notes: data.notes,
         },
         create: {
-          romaneioCode: dto.romaneioCode,
+          romaneioCode: data.romaneioCode,
           driverId,
           tripId,
-          status: dto.status || RomaneioStatus.APPROVED,
-          notes: dto.notes,
+          status: data.status || RomaneioStatus.APPROVED,
+          notes: data.notes,
         },
       });
 
-      if (dto.documents && dto.documents.length > 0) {
-        for (const doc of dto.documents) {
+      if (data.documents && data.documents.length > 0) {
+        for (const doc of data.documents) {
           await tx.romaneioDocument.create({
             data: {
               romaneioId: romaneio.id,
-              documentType: doc.documentType,
+              documentType: doc.documentType || 'NFE',
               documentNumber: doc.documentNumber,
               accessKey: doc.accessKey,
               fileUrl: doc.fileUrl,
@@ -431,7 +634,7 @@ export class ErpIntegrationService {
       };
 
       await this.idempotencyService.recordResponse(
-        idempotencyKey,
+        key,
         responsePayload,
         `/api/v1/integrations/erp/romaneios`,
         tx,
@@ -445,28 +648,37 @@ export class ErpIntegrationService {
 
   /**
    * Receptor genérico de Webhooks do ecossistema ERP
+   * 7. POST /api/v1/integrations/erp/events
    */
-  async processGenericEvent(envelope: any, idempotencyKey: string) {
-    const key = idempotencyKey || envelope.idempotencyKey;
+  async processGenericEvent(envelope: any, headerIdempotencyKey?: string) {
+    const key = headerIdempotencyKey || envelope.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
     const cached = await this.idempotencyService.getProcessedResponse(key);
     if (cached) return cached;
 
     const event = envelope.event || envelope.eventType;
 
-    let subResult = null;
     if (event === 'settlement.created' || event === 'settlement.updated') {
-      subResult = await this.processSettlementEvent(envelope as ErpSettlementWebhookDto, key);
-      return subResult;
+      return this.processSettlementEvent(envelope as ErpSettlementWebhookDto, key);
     } else if (event === 'payment.confirmed' || event === 'payment.created') {
-      subResult = await this.processPaymentEvent(envelope as ErpPaymentWebhookDto, key);
-      return subResult;
+      return this.processPaymentEvent(envelope as ErpPaymentWebhookDto, key);
+    } else if (event === 'receipt.verified' || event === 'receipt.uploaded') {
+      return this.processReceiptEvent(envelope as ErpReceiptWebhookDto, key);
+    } else if (event === 'adjustment.created' || event === 'adjustment.updated') {
+      return this.processAdjustmentEvent(envelope as ErpAdjustmentWebhookDto, key);
+    } else if (event?.startsWith('toll.')) {
+      return this.processTollEvent(envelope, key);
+    } else if (event?.startsWith('romaneio.')) {
+      return this.processRomaneioEvent(envelope, key);
     } else {
-      // Evento sem mapeamento financeiro seguro: armazena sem alterar dados financeiros incorretamente
       const responsePayload = {
         success: true,
         acknowledged: true,
         event,
-        message: `Evento "${event}" recebido e armazenado com sucesso`,
+        message: `Evento "${event}" recebido e registrado com sucesso`,
         occurredAt: envelope.occurredAt || new Date().toISOString(),
         processedAt: new Date().toISOString(),
       };
