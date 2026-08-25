@@ -1167,14 +1167,18 @@ export class AdminWebController {
     }
 
     // AUTH & LOGIN
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const submitBtn = document.getElementById('login-submit-btn');
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner"></span><span>Autenticando...</span>';
+    async function handleLogin(e) {
+      if (e) e.preventDefault();
+      console.log('[ADMIN] submit disparado');
 
-      const username = document.getElementById('login-username').value.trim();
-      const password = document.getElementById('login-password').value;
+      const submitBtn = document.getElementById('login-submit-btn');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span><span>Autenticando...</span>';
+      }
+
+      const username = (document.getElementById('login-username')?.value || '').trim();
+      const password = document.getElementById('login-password')?.value || '';
 
       try {
         const res = await fetch('/api/v1/auth/login', {
@@ -1204,9 +1208,13 @@ export class AdminWebController {
           STATE.refreshToken = data.refresh_token;
           STATE.user = data.user;
 
-          localStorage.setItem('hk_access_token', data.access_token);
-          localStorage.setItem('hk_refresh_token', data.refresh_token);
-          localStorage.setItem('hk_user', JSON.stringify(data.user));
+          try {
+            localStorage.setItem('hk_access_token', data.access_token);
+            localStorage.setItem('hk_refresh_token', data.refresh_token);
+            localStorage.setItem('hk_user', JSON.stringify(data.user));
+          } catch (e) {
+            console.warn('[ADMIN] Falha ao persistir no localStorage:', e);
+          }
 
           showApp();
           showToast(\`Bem-vindo(a), \${data.user.name}!\`, 'success');
@@ -1214,13 +1222,16 @@ export class AdminWebController {
           showToast(data.message || 'Credenciais inválidas ou resposta inesperada da API.', 'error');
         }
       } catch (err) {
+        console.error('[ADMIN] Erro no login:', err);
         showToast(err.message || 'Falha na comunicação com o servidor HK Central.', 'error');
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
-        renderIcons(submitBtn);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
+          renderIcons(submitBtn);
+        }
       }
-    });
+    }
 
     function showApp() {
       document.getElementById('auth-screen').classList.add('hidden');
@@ -1526,7 +1537,7 @@ export class AdminWebController {
     }
 
     // FORM USER SUBMIT
-    document.getElementById('form-user').addEventListener('submit', async (e) => {
+    async function handleUserSubmit(e) {
       e.preventDefault();
       const id = document.getElementById('user-form-id').value;
       const isEdit = Boolean(id);
@@ -1569,7 +1580,7 @@ export class AdminWebController {
       } catch (err) {
         showToast(err.message || 'Erro ao salvar usuário', 'error');
       }
-    });
+    }
 
     // USER STATUS TOGGLE
     async function toggleUserStatus(id, currentStatus) {
@@ -1598,7 +1609,7 @@ export class AdminWebController {
       openModal('modal-reset-pwd');
     }
 
-    document.getElementById('form-reset-pwd').addEventListener('submit', async (e) => {
+    async function handleResetPasswordSubmit(e) {
       e.preventDefault();
       const id = document.getElementById('reset-pwd-user-id').value;
       const pwd = document.getElementById('reset-new-password').value;
@@ -1619,7 +1630,7 @@ export class AdminWebController {
       } catch (err) {
         showToast(\`Erro ao redefinir senha: \${err.message}\`, 'error');
       }
-    });
+    }
 
     // DELETE USER SAFELY
     async function deleteUserSafely(id, name) {
@@ -1662,7 +1673,7 @@ export class AdminWebController {
       }
     }
 
-    document.getElementById('form-vehicle').addEventListener('submit', async (e) => {
+    async function handleVehicleSubmit(e) {
       e.preventDefault();
       const id = document.getElementById('vehicle-form-id').value;
       const isEdit = Boolean(id);
@@ -1694,40 +1705,81 @@ export class AdminWebController {
       } catch (err) {
         showToast(err.message || 'Erro ao salvar veículo', 'error');
       }
-    });
+    }
 
-    // Auto format CPF
-    document.getElementById('user-form-cpf')?.addEventListener('input', (e) => {
-      let v = e.target.value.replace(/\\D/g, '');
-      if (v.length > 11) v = v.substring(0, 11);
-      if (v.length > 9) v = v.replace(/(\\d{3})(\\d{3})(\\d{3})(\\d{1,2})/, '$1.$2.$3-$4');
-      else if (v.length > 6) v = v.replace(/(\\d{3})(\\d{3})(\\d{1,3})/, '$1.$2.$3');
-      else if (v.length > 3) v = v.replace(/(\\d{3})(\\d{1,3})/, '$1.$2');
-      e.target.value = v;
-    });
+    // INITIALIZATION & LISTENERS REGISTRATION
+    function initAdminPanel() {
+      console.log('[ADMIN] script carregado');
 
-    // Filter Listeners
-    ['user-search-input', 'user-role-filter', 'user-status-filter'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', () => {
-        clearTimeout(window._userSearchTimeout);
-        window._userSearchTimeout = setTimeout(loadUsers, 250);
+      const loginForm = document.getElementById('login-form');
+      if (!loginForm) {
+        console.error('[ADMIN] login-form não encontrado');
+      } else {
+        console.log('[ADMIN] login-form encontrado:', true);
+        loginForm.addEventListener('submit', handleLogin);
+      }
+
+      const togglePwdBtn = document.getElementById('toggle-pwd-btn');
+      if (togglePwdBtn) {
+        togglePwdBtn.addEventListener('click', () => {
+          const input = document.getElementById('login-password');
+          if (input) input.type = input.type === 'password' ? 'text' : 'password';
+        });
+      }
+
+      const formUser = document.getElementById('form-user');
+      if (formUser) formUser.addEventListener('submit', handleUserSubmit);
+
+      const formResetPwd = document.getElementById('form-reset-pwd');
+      if (formResetPwd) formResetPwd.addEventListener('submit', handleResetPasswordSubmit);
+
+      const formVehicle = document.getElementById('form-vehicle');
+      if (formVehicle) formVehicle.addEventListener('submit', handleVehicleSubmit);
+
+      const userCpfInput = document.getElementById('user-form-cpf');
+      if (userCpfInput) {
+        userCpfInput.addEventListener('input', (e) => {
+          let v = e.target.value.replace(/\\D/g, '');
+          if (v.length > 11) v = v.substring(0, 11);
+          if (v.length > 9) v = v.replace(/(\\d{3})(\\d{3})(\\d{3})(\\d{1,2})/, '$1.$2.$3-$4');
+          else if (v.length > 6) v = v.replace(/(\\d{3})(\\d{3})(\\d{1,3})/, '$1.$2.$3');
+          else if (v.length > 3) v = v.replace(/(\\d{3})(\\d{1,3})/, '$1.$2');
+          e.target.value = v;
+        });
+      }
+
+      ['user-search-input', 'user-role-filter', 'user-status-filter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', () => {
+            clearTimeout(window._userSearchTimeout);
+            window._userSearchTimeout = setTimeout(loadUsers, 250);
+          });
+        }
       });
-    });
 
-    ['vehicle-search-input', 'vehicle-status-filter'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', () => {
-        clearTimeout(window._vehicleSearchTimeout);
-        window._vehicleSearchTimeout = setTimeout(loadVehicles, 250);
+      ['vehicle-search-input', 'vehicle-status-filter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', () => {
+            clearTimeout(window._vehicleSearchTimeout);
+            window._vehicleSearchTimeout = setTimeout(loadVehicles, 250);
+          });
+        }
       });
-    });
 
-    // STARTUP
-    document.addEventListener('DOMContentLoaded', () => {
       renderIcons(document);
+
       if (STATE.token && STATE.user) {
         showApp();
       }
-    });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAdminPanel);
+    } else {
+      initAdminPanel();
+    }
   </script>
 </body>
 </html>`;
