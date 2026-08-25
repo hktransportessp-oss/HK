@@ -1177,36 +1177,44 @@ export class AdminWebController {
       const password = document.getElementById('login-password').value;
 
       try {
-        const data = await fetch('/api/v1/auth/login', {
+        const res = await fetch('/api/v1/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-        }).then(r => r.json());
+          body: JSON.stringify({
+            phone_or_cpf: username,
+            password
+          }),
+        });
 
-        if (data.accessToken && data.user) {
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const errMsg = Array.isArray(data.message) ? data.message.join(', ') : (data.message || \`Erro na autenticação (\${res.status})\`);
+          showToast(errMsg, 'error');
+          return;
+        }
+
+        if (data.access_token && data.user) {
           if (data.user.role !== 'ADMIN' && data.user.role !== 'MANAGER') {
             showToast('Acesso negado: Apenas administradores e gerentes podem acessar este painel.', 'error');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
-            renderIcons(submitBtn);
             return;
           }
 
-          STATE.token = data.accessToken;
-          STATE.refreshToken = data.refreshToken;
+          STATE.token = data.access_token;
+          STATE.refreshToken = data.refresh_token;
           STATE.user = data.user;
 
-          localStorage.setItem('hk_access_token', data.accessToken);
-          localStorage.setItem('hk_refresh_token', data.refreshToken);
+          localStorage.setItem('hk_access_token', data.access_token);
+          localStorage.setItem('hk_refresh_token', data.refresh_token);
           localStorage.setItem('hk_user', JSON.stringify(data.user));
 
           showApp();
           showToast(\`Bem-vindo(a), \${data.user.name}!\`, 'success');
         } else {
-          showToast(data.message || 'Credenciais inválidas ou conta inativa', 'error');
+          showToast(data.message || 'Credenciais inválidas ou resposta inesperada da API.', 'error');
         }
       } catch (err) {
-        showToast('Falha na comunicação com o servidor HK Central.', 'error');
+        showToast(err.message || 'Falha na comunicação com o servidor HK Central.', 'error');
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
