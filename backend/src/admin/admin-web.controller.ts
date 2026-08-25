@@ -8,307 +8,699 @@ export class AdminWebController {
   @ApiExcludeEndpoint()
   serveAdminApp(@Res() res: Response) {
     const html = `<!DOCTYPE html>
-<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<html lang="pt-BR" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HK Connect — Painel Administrativo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-          },
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
-              950: '#0f172a',
-            },
-            accent: {
-              500: '#f59e0b',
-              600: '#d97706',
-            }
-          }
-        }
-      }
-    }
-  </script>
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; }
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+    /* CSS RESET & VARIABLES */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-base: #020617;
+      --bg-surface: #0f172a;
+      --bg-surface-elevated: #1e293b;
+      --bg-surface-hover: #334155;
+      --border-color: #334155;
+      --border-subtle: rgba(51, 65, 85, 0.6);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --brand-primary: #2563eb;
+      --brand-hover: #1d4ed8;
+      --brand-light: #3b82f6;
+      --emerald-base: #10b981;
+      --emerald-bg: rgba(16, 185, 129, 0.12);
+      --emerald-border: rgba(16, 185, 129, 0.3);
+      --rose-base: #f43f5e;
+      --rose-bg: rgba(244, 63, 94, 0.12);
+      --rose-border: rgba(244, 63, 94, 0.3);
+      --amber-base: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.12);
+      --amber-border: rgba(245, 158, 11, 0.3);
+      --purple-base: #a855f7;
+      --purple-bg: rgba(168, 85, 247, 0.12);
+      --purple-border: rgba(168, 85, 247, 0.3);
+      --cyan-base: #06b6d4;
+      --cyan-bg: rgba(6, 182, 212, 0.12);
+      --cyan-border: rgba(6, 182, 212, 0.3);
+    }
+    
+    html, body {
+      height: 100%;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* UTILITY HELPERS */
+    .hidden { display: none !important; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .flex-row { flex-direction: row; }
+    .items-center { align-items: center; }
+    .items-start { align-items: flex-start; }
+    .justify-between { justify-content: space-between; }
+    .justify-center { justify-content: center; }
+    .justify-end { justify-content: flex-end; }
+    .flex-1 { flex: 1 1 0%; }
+    .shrink-0 { flex-shrink: 0; }
+    .gap-1 { gap: 0.25rem; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-3 { gap: 0.75rem; }
+    .gap-4 { gap: 1rem; }
+    .gap-6 { gap: 1.5rem; }
+    .w-full { width: 100%; }
+    .h-full { height: 100%; }
+    .min-h-full { min-height: 100%; }
+    .relative { position: relative; }
+    .absolute { position: absolute; }
+    .fixed { position: fixed; }
+    .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+    .z-10 { z-index: 10; }
+    .z-50 { z-index: 50; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .uppercase { text-transform: uppercase; }
+    .text-xs { font-size: 0.75rem; }
+    .text-sm { font-size: 0.875rem; }
+    .text-base { font-size: 1rem; }
+    .text-lg { font-size: 1.125rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .tracking-tight { letter-spacing: -0.025em; }
+    .tracking-wider { letter-spacing: 0.05em; }
+
+    /* SVG ICONS */
+    .svg-icon {
+      display: inline-block;
+      width: 1.25rem;
+      height: 1.25rem;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+    }
+    .icon-xs { width: 0.875rem; height: 0.875rem; }
+    .icon-sm { width: 1rem; height: 1rem; }
+    .icon-md { width: 1.25rem; height: 1.25rem; }
+    .icon-lg { width: 1.5rem; height: 1.5rem; }
+    .icon-xl { width: 2rem; height: 2rem; }
+
+    /* GLASS CARD & BOXES */
+    .card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-color);
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1;
+      border: 1px solid transparent;
+    }
+    .badge-brand { background: rgba(37, 99, 235, 0.15); color: var(--brand-light); border-color: rgba(37, 99, 235, 0.3); }
+    .badge-success { background: var(--emerald-bg); color: var(--emerald-base); border-color: var(--emerald-border); }
+    .badge-danger { background: var(--rose-bg); color: var(--rose-base); border-color: var(--rose-border); }
+    .badge-warning { background: var(--amber-bg); color: var(--amber-base); border-color: var(--amber-border); }
+    .badge-purple { background: var(--purple-bg); color: var(--purple-base); border-color: var(--purple-border); }
+    .badge-cyan { background: var(--cyan-bg); color: var(--cyan-base); border-color: var(--cyan-border); }
+    .badge-muted { background: var(--bg-surface-elevated); color: var(--text-secondary); border-color: var(--border-color); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      color: #fff;
+    }
+    .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.75rem; border-radius: 0.5rem; }
+    .btn-icon { padding: 0.45rem; border-radius: 0.5rem; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--brand-light), var(--brand-primary));
+      border-color: var(--brand-hover);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+    }
+    .btn-primary:hover { background: var(--brand-hover); }
+    .btn-cyan {
+      background: linear-gradient(135deg, #06b6d4, #0891b2);
+      border-color: #0e7490;
+      box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25);
+    }
+    .btn-cyan:hover { background: #0891b2; }
+    .btn-warning {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-color: #b45309;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+    }
+    .btn-warning:hover { background: #d97706; }
+    .btn-secondary {
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-color);
+    }
+    .btn-secondary:hover { background: var(--bg-surface-hover); }
+    .btn-ghost-danger {
+      background: var(--rose-bg);
+      color: var(--rose-base);
+      border-color: var(--rose-border);
+    }
+    .btn-ghost-danger:hover { background: rgba(244, 63, 94, 0.25); }
+    .btn-ghost-warning {
+      background: var(--amber-bg);
+      color: var(--amber-base);
+      border-color: var(--amber-border);
+    }
+    .btn-ghost-warning:hover { background: rgba(245, 158, 11, 0.25); }
+    .btn-ghost-success {
+      background: var(--emerald-bg);
+      color: var(--emerald-base);
+      border-color: var(--emerald-border);
+    }
+    .btn-ghost-success:hover { background: rgba(16, 185, 129, 0.25); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* FORMS & INPUTS */
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.4rem;
+    }
+    .input-control, select.input-control {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .input-control:focus {
+      border-color: var(--brand-light);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+    .input-with-icon {
+      position: relative;
+    }
+    .input-with-icon .input-icon {
+      position: absolute;
+      top: 50%;
+      left: 0.85rem;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .input-with-icon .input-control {
+      padding-left: 2.5rem;
+    }
+    .input-with-icon .input-toggle-btn {
+      position: absolute;
+      top: 50%;
+      right: 0.85rem;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .input-with-icon .input-toggle-btn:hover { color: var(--text-primary); }
+
+    /* TABLES */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+    thead {
+      background-color: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid var(--border-color);
+    }
+    th {
+      padding: 0.85rem 1.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    td {
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+      color: var(--text-primary);
+    }
+    tr:hover td { background-color: rgba(30, 41, 59, 0.4); }
+
+    /* GRIDS */
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* AUTH LOGIN SCREEN */
+    #auth-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 40%),
+                  radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.08), transparent 40%),
+                  var(--bg-base);
+    }
+    .login-box {
+      width: 100%;
+      max-width: 420px;
+      padding: 2.25rem;
+    }
+    .logo-badge {
+      width: 4rem;
+      height: 4rem;
+      border-radius: 1rem;
+      background: linear-gradient(135deg, var(--brand-light), var(--brand-primary));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      margin-bottom: 1rem;
+      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.35);
+    }
+
+    /* MAIN APP LAYOUT */
+    #app-layout {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: row;
+    }
+    @media (max-width: 860px) {
+      #app-layout { flex-direction: column; }
+    }
+    aside.sidebar {
+      width: 260px;
+      background-color: var(--bg-surface);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    @media (max-width: 860px) {
+      aside.sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); }
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      padding: 0.7rem 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+    .nav-item:hover { background-color: var(--bg-surface-elevated); color: #fff; }
+    .nav-item.active { background-color: var(--brand-primary); color: #fff; font-weight: 600; }
+    
+    .topbar {
+      height: 4rem;
+      padding: 0 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-content {
+      width: 100%;
+      max-width: 580px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    /* TOAST */
+    #toast-container {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.25rem;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-width: 380px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 0.85rem 1.1rem;
+      border-radius: 0.75rem;
+      border: 1px solid;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      pointer-events: auto;
+      transition: all 0.25s ease;
+      font-size: 0.8125rem;
+    }
+    .toast-success { background: #064e3b; border-color: #059669; color: #a7f3d0; }
+    .toast-error { background: #4c0519; border-color: #e11d48; color: #fecdd3; }
+    .toast-info { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+
+    .spinner {
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-<body class="h-full flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+<body class="min-h-full">
 
-  <!-- NOTIFICATION TOAST CONTAINER -->
-  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3 max-w-sm pointer-events-none"></div>
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
 
   <!-- AUTH SCREEN (LOGIN) -->
-  <div id="auth-screen" class="min-h-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-    <div class="w-full max-w-md glass-card rounded-2xl p-8 shadow-2xl border border-slate-800 relative overflow-hidden">
-      <div class="absolute -top-24 -right-24 w-48 h-48 bg-brand-600/20 rounded-full blur-3xl"></div>
-      <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl"></div>
-
-      <div class="text-center mb-8 relative">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-brand-400 text-white shadow-lg shadow-brand-500/30 mb-4">
-          <i data-lucide="truck" class="w-8 h-8"></i>
+  <div id="auth-screen">
+    <div class="card login-box">
+      <div class="text-center" style="margin-bottom: 2rem;">
+        <div class="logo-badge">
+          <span data-lucide="truck" class="icon-xl"></span>
         </div>
-        <h1 class="text-2xl font-bold tracking-tight text-white">HK CONNECT</h1>
-        <p class="text-sm text-slate-400 mt-1">Painel de Gestão e Operações</p>
-        <span class="inline-block px-2.5 py-0.5 mt-2 text-xs font-semibold uppercase tracking-wider rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">
-          Acesso Restrito: ADMIN & MANAGER
-        </span>
+        <h1 class="text-2xl font-bold tracking-tight">HK CONNECT</h1>
+        <p class="text-sm" style="color: var(--text-secondary); margin-top: 0.25rem;">Painel de Gestão e Operações</p>
+        <div style="margin-top: 0.75rem;">
+          <span class="badge badge-brand">Acesso Restrito: ADMIN & MANAGER</span>
+        </div>
       </div>
 
-      <form id="login-form" class="space-y-5 relative">
+      <form id="login-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">CPF ou Telefone</label>
-          <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-              <i data-lucide="user" class="w-4 h-4"></i>
-            </div>
-            <input type="text" id="login-username" required placeholder="000.000.000-00" 
-              class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition">
+          <label for="login-username">CPF ou Telefone</label>
+          <div class="input-with-icon">
+            <span class="input-icon" data-lucide="user"></span>
+            <input type="text" id="login-username" class="input-control" required placeholder="000.000.000-00">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">Senha</label>
-          <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-              <i data-lucide="lock" class="w-4 h-4"></i>
-            </div>
-            <input type="password" id="login-password" required placeholder="••••••••" 
-              class="w-full pl-10 pr-10 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition">
-            <button type="button" id="toggle-pwd-btn" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300">
-              <i data-lucide="eye" class="w-4 h-4"></i>
+          <label for="login-password">Senha</label>
+          <div class="input-with-icon">
+            <span class="input-icon" data-lucide="lock"></span>
+            <input type="password" id="login-password" class="input-control" required placeholder="••••••••">
+            <button type="button" id="toggle-pwd-btn" class="input-toggle-btn" title="Mostrar/Ocultar Senha">
+              <span data-lucide="eye" class="icon-sm"></span>
             </button>
           </div>
         </div>
 
-        <button type="submit" id="login-submit-btn" class="w-full py-3.5 px-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/25 transition duration-150 flex items-center justify-center gap-2">
+        <button type="submit" id="login-submit-btn" class="btn btn-primary" style="padding: 0.85rem; margin-top: 0.5rem;">
           <span>Entrar no Painel</span>
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          <span data-lucide="arrow-right" class="icon-sm"></span>
         </button>
       </form>
     </div>
   </div>
 
-  <!-- MAIN APPLICATION LAYOUT -->
-  <div id="app-layout" class="hidden min-h-full flex flex-col md:flex-row bg-slate-950">
+  <!-- MAIN APP LAYOUT (HIDDEN UNTIL AUTH) -->
+  <div id="app-layout" class="hidden">
     
     <!-- SIDEBAR -->
-    <aside class="w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-      <!-- Brand Header -->
-      <div class="h-16 px-6 border-b border-slate-800 flex items-center justify-between">
+    <aside class="sidebar">
+      <div style="height: 4rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-md">
-            <i data-lucide="truck" class="w-5 h-5"></i>
+          <div style="width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; color: #fff;">
+            <span data-lucide="truck" class="icon-md"></span>
           </div>
           <div>
-            <span class="font-bold text-white tracking-tight">HK CONNECT</span>
-            <span class="block text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Painel Admin</span>
+            <div class="font-bold text-sm tracking-tight">HK CONNECT</div>
+            <div class="text-xs font-semibold" style="color: var(--brand-light);">Painel Admin</div>
           </div>
         </div>
       </div>
 
       <!-- User Info Badge -->
-      <div class="p-4 mx-3 my-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center text-white font-bold text-sm" id="user-avatar">
+      <div style="padding: 1rem; margin: 0.75rem; border-radius: 0.75rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 0.75rem;">
+        <div id="user-avatar" style="width: 2.25rem; height: 2.25rem; border-radius: 50%; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem;">
           AD
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold text-white truncate" id="user-display-name">Administrador</p>
-          <p class="text-xs text-brand-400 font-medium" id="user-display-role">ADMIN</p>
+        <div class="flex-1" style="min-width: 0;">
+          <p id="user-display-name" class="text-sm font-semibold truncate">Administrador</p>
+          <p id="user-display-role" class="text-xs" style="color: var(--brand-light); font-weight: 600;">ADMIN</p>
         </div>
       </div>
 
-      <!-- Navigation Links -->
-      <nav class="flex-1 px-3 space-y-1.5 py-2">
-        <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white">
-          <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-400"></i>
+      <!-- Nav Links -->
+      <nav style="flex: 1; padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.35rem;">
+        <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active">
+          <span data-lucide="layout-dashboard" class="icon-sm"></span>
           <span>Dashboard</span>
         </button>
 
-        <button onclick="navigate('users')" id="nav-users" class="nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white">
-          <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
+        <button onclick="navigate('users')" id="nav-users" class="nav-item">
+          <span data-lucide="users" class="icon-sm"></span>
           <span>Usuários e Motoristas</span>
         </button>
 
-        <button onclick="navigate('vehicles')" id="nav-vehicles" class="nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white">
-          <i data-lucide="truck" class="w-4 h-4 text-slate-400"></i>
+        <button onclick="navigate('vehicles')" id="nav-vehicles" class="nav-item">
+          <span data-lucide="truck" class="icon-sm"></span>
           <span>Frota de Veículos</span>
         </button>
       </nav>
 
-      <!-- Logout Footer -->
-      <div class="p-3 border-t border-slate-800">
-        <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
+      <!-- Logout Button -->
+      <div style="padding: 0.75rem; border-top: 1px solid var(--border-color);">
+        <button onclick="handleLogout()" class="nav-item" style="color: var(--rose-base);">
+          <span data-lucide="log-out" class="icon-sm"></span>
           <span>Sair da Conta</span>
         </button>
       </div>
     </aside>
 
     <!-- MAIN CONTENT AREA -->
-    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
+    <main class="flex-1 flex flex-col" style="min-width: 0; overflow-y: auto;">
       
       <!-- TOPBAR -->
-      <header class="h-16 px-6 border-b border-slate-800 bg-slate-900/40 backdrop-blur-md flex items-center justify-between sticky top-0 z-10">
+      <header class="topbar">
+        <h2 id="page-title" class="text-lg font-bold">Dashboard</h2>
         <div class="flex items-center gap-3">
-          <h2 id="page-title" class="text-lg font-bold text-white">Dashboard</h2>
-        </div>
-        <div class="flex items-center gap-3">
-          <button onclick="refreshCurrentView()" title="Recarregar Dados" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 text-xs font-medium">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-            <span class="hidden sm:inline">Atualizar</span>
+          <button onclick="refreshCurrentView()" title="Recarregar Dados" class="btn btn-secondary btn-sm">
+            <span data-lucide="refresh-cw" class="icon-xs"></span>
+            <span>Atualizar</span>
           </button>
-          <span id="api-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="badge badge-success">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--emerald-base);"></span>
             API Conectada
           </span>
         </div>
       </header>
 
       <!-- VIEW: DASHBOARD -->
-      <section id="view-dashboard" class="p-6 space-y-6">
+      <section id="view-dashboard" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
         <!-- Stats Cards Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div class="grid-stats">
           
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Total Usuários</span>
-              <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400"><i data-lucide="users" class="w-4 h-4"></i></div>
+              <span class="badge badge-brand"><span data-lucide="users" class="icon-xs"></span></span>
             </div>
-            <p id="stat-total-users" class="text-2xl font-bold text-white">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Cadastrados no HK Central</span>
+            <p id="stat-total-users" class="text-2xl font-bold">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">HK Central</span>
           </div>
 
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Usuários Ativos</span>
-              <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400"><i data-lucide="check-circle" class="w-4 h-4"></i></div>
+              <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
             </div>
-            <p id="stat-active-users" class="text-2xl font-bold text-emerald-400">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Acesso liberado</span>
+            <p id="stat-active-users" class="text-2xl font-bold" style="color: var(--emerald-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Acesso liberado</span>
           </div>
 
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Inativos / Bloq.</span>
-              <div class="p-2 rounded-xl bg-rose-500/10 text-rose-400"><i data-lucide="shield-alert" class="w-4 h-4"></i></div>
+              <span class="badge badge-danger"><span data-lucide="shield-alert" class="icon-xs"></span></span>
             </div>
-            <p id="stat-inactive-users" class="text-2xl font-bold text-rose-400">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Acesso negado</span>
+            <p id="stat-inactive-users" class="text-2xl font-bold" style="color: var(--rose-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Acesso negado</span>
           </div>
 
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Motoristas</span>
-              <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400"><i data-lucide="user-check" class="w-4 h-4"></i></div>
+              <span class="badge badge-warning"><span data-lucide="user-check" class="icon-xs"></span></span>
             </div>
-            <p id="stat-total-drivers" class="text-2xl font-bold text-amber-400">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Perfis operacionais</span>
+            <p id="stat-total-drivers" class="text-2xl font-bold" style="color: var(--amber-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Perfis operacionais</span>
           </div>
 
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">ERP_ONLY</span>
-              <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400"><i data-lucide="link-2-off" class="w-4 h-4"></i></div>
+              <span class="badge badge-purple"><span data-lucide="link-2-off" class="icon-xs"></span></span>
             </div>
-            <p id="stat-erp-drivers" class="text-2xl font-bold text-purple-400">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Aguardando login</span>
+            <p id="stat-erp-drivers" class="text-2xl font-bold" style="color: var(--purple-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Aguardando login</span>
           </div>
 
-          <div class="glass-card p-5 rounded-2xl border border-slate-800">
-            <div class="flex items-center justify-between text-slate-400 mb-2">
+          <div class="card" style="padding: 1.25rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.5rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Veículos</span>
-              <div class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400"><i data-lucide="truck" class="w-4 h-4"></i></div>
+              <span class="badge badge-cyan"><span data-lucide="truck" class="icon-xs"></span></span>
             </div>
-            <p id="stat-total-vehicles" class="text-2xl font-bold text-cyan-400">-</p>
-            <span class="text-xs text-slate-400 mt-1 block">Frota registrada</span>
+            <p id="stat-total-vehicles" class="text-2xl font-bold" style="color: var(--cyan-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Frota registrada</span>
           </div>
         </div>
 
-        <!-- Quick Action & Unlinked Drivers Alert -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div class="glass-card p-6 rounded-2xl border border-slate-800 lg:col-span-2 space-y-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-base font-bold text-white">Atalhos Operacionais</h3>
-                <p class="text-xs text-slate-400 mt-0.5">Gerencie os cadastros rápidos para liberação de acesso ao app</p>
-              </div>
+        <!-- Quick Actions & Unlinked ERP Drivers -->
+        <div class="grid-2">
+          <div class="card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div>
+              <h3 class="text-base font-bold">Atalhos Operacionais</h3>
+              <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.25rem;">Gerencie os cadastros rápidos para liberação de acesso ao app</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <button onclick="openCreateUserModal('DRIVER')" class="p-4 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-left transition flex items-start gap-3">
-                <div class="p-2.5 rounded-xl bg-brand-500/20 text-brand-400 mt-0.5">
-                  <i data-lucide="user-plus" class="w-5 h-5"></i>
-                </div>
+            <div class="grid-2" style="margin-top: 0.5rem;">
+              <button onclick="openCreateUserModal('DRIVER')" class="btn btn-secondary" style="padding: 1.25rem; display: flex; align-items: flex-start; justify-content: flex-start; text-align: left;">
+                <span class="badge badge-brand" style="padding: 0.5rem; margin-top: 0.25rem;"><span data-lucide="user-plus" class="icon-md"></span></span>
                 <div>
-                  <span class="font-semibold text-white text-sm block">Criar Motorista</span>
-                  <span class="text-xs text-slate-400 mt-0.5 block">Cadastre o login e vincule veículo para teste no APK</span>
+                  <span class="font-semibold text-sm block">Criar Motorista</span>
+                  <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Cadastre o login e vincule veículo para teste no APK</span>
                 </div>
               </button>
 
-              <button onclick="openCreateVehicleModal()" class="p-4 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-left transition flex items-start gap-3">
-                <div class="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 mt-0.5">
-                  <i data-lucide="plus-circle" class="w-5 h-5"></i>
-                </div>
+              <button onclick="openCreateVehicleModal()" class="btn btn-secondary" style="padding: 1.25rem; display: flex; align-items: flex-start; justify-content: flex-start; text-align: left;">
+                <span class="badge badge-cyan" style="padding: 0.5rem; margin-top: 0.25rem;"><span data-lucide="plus-circle" class="icon-md"></span></span>
                 <div>
-                  <span class="font-semibold text-white text-sm block">Cadastrar Veículo</span>
-                  <span class="text-xs text-slate-400 mt-0.5 block">Adicione placas e modelos à frota</span>
+                  <span class="font-semibold text-sm block">Cadastrar Veículo</span>
+                  <span class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Adicione placas e modelos à frota</span>
                 </div>
               </button>
             </div>
           </div>
 
           <!-- ERP Pending Linking -->
-          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
             <div class="flex items-center justify-between">
-              <h3 class="text-base font-bold text-white">Sincronização ERP</h3>
-              <span id="erp-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-500/20 text-purple-300">0 pendentes</span>
+              <h3 class="text-base font-bold">Sincronização ERP</h3>
+              <span id="erp-badge" class="badge badge-purple">0 pendentes</span>
             </div>
-            <p class="text-xs text-slate-400">Motoristas criados pelo ERP que ainda não possuem usuário para login no APK.</p>
-            <div id="unlinked-drivers-list" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-              <p class="text-xs text-slate-500 italic">Nenhum motorista pendente de vínculo.</p>
+            <p class="text-xs" style="color: var(--text-secondary);">Motoristas criados pelo ERP que ainda não possuem usuário para login no APK.</p>
+            <div id="unlinked-drivers-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 180px; overflow-y: auto;">
+              <p class="text-xs" style="color: var(--text-muted); font-style: italic;">Nenhum motorista pendente de vínculo.</p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- VIEW: USERS -->
-      <section id="view-users" class="hidden p-6 space-y-6">
-        <!-- Action Header & Filters -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="flex-1 flex flex-wrap items-center gap-3">
-            <!-- Search -->
-            <div class="relative min-w-[240px] flex-1 max-w-md">
-              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                <i data-lucide="search" class="w-4 h-4"></i>
-              </div>
-              <input type="text" id="user-search-input" placeholder="Buscar por Nome, CPF ou Telefone..." 
-                class="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <section id="view-users" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Filters & Action -->
+        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
+          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
+            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
+              <span class="input-icon" data-lucide="search"></span>
+              <input type="text" id="user-search-input" class="input-control" placeholder="Buscar por Nome, CPF ou Telefone...">
             </div>
 
-            <!-- Role Filter -->
-            <select id="user-role-filter" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <select id="user-role-filter" class="input-control" style="width: auto; min-width: 170px;">
               <option value="">Todos os Perfis</option>
               <option value="DRIVER">Motorista (DRIVER)</option>
               <option value="MANAGER">Gerente (MANAGER)</option>
@@ -316,8 +708,7 @@ export class AdminWebController {
               <option value="OPERATOR">Operador (OPERATOR)</option>
             </select>
 
-            <!-- Status Filter -->
-            <select id="user-status-filter" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <select id="user-status-filter" class="input-control" style="width: auto; min-width: 150px;">
               <option value="">Todos os Status</option>
               <option value="ACTIVE">Ativo (ACTIVE)</option>
               <option value="INACTIVE">Inativo (INACTIVE)</option>
@@ -325,55 +716,45 @@ export class AdminWebController {
             </select>
           </div>
 
-          <button onclick="openCreateUserModal()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-brand-500/20 transition flex items-center gap-2 shrink-0">
-            <i data-lucide="user-plus" class="w-4 h-4"></i>
+          <button onclick="openCreateUserModal()" class="btn btn-primary">
+            <span data-lucide="user-plus" class="icon-sm"></span>
             <span>Novo Usuário</span>
           </button>
         </div>
 
-        <!-- Users Table Card -->
-        <div class="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-          <div class="overflow-x-auto custom-scrollbar">
-            <table class="w-full text-left text-sm text-slate-300">
-              <thead class="bg-slate-900/90 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800 tracking-wider">
-                <tr>
-                  <th class="px-6 py-3.5">Usuário</th>
-                  <th class="px-6 py-3.5">CPF / Telefone</th>
-                  <th class="px-6 py-3.5">Perfil</th>
-                  <th class="px-6 py-3.5">Status</th>
-                  <th class="px-6 py-3.5">Motorista / Veículo</th>
-                  <th class="px-6 py-3.5 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="users-table-body" class="divide-y divide-slate-800/60">
-                <tr>
-                  <td colspan="6" class="px-6 py-8 text-center text-slate-500">
-                    <div class="inline-flex items-center gap-2">
-                      <div class="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                      Carregando usuários...
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <!-- Table -->
+        <div class="card table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>CPF / Telefone</th>
+                <th>Perfil</th>
+                <th>Status</th>
+                <th>Motorista / Veículo</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <tr>
+                <td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando usuários...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
       <!-- VIEW: VEHICLES -->
-      <section id="view-vehicles" class="hidden p-6 space-y-6">
-        <!-- Action Header & Filters -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="flex-1 flex flex-wrap items-center gap-3">
-            <div class="relative min-w-[240px] flex-1 max-w-md">
-              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                <i data-lucide="search" class="w-4 h-4"></i>
-              </div>
-              <input type="text" id="vehicle-search-input" placeholder="Buscar por Placa, Modelo ou Marca..." 
-                class="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <section id="view-vehicles" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Filters & Action -->
+        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
+          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
+            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
+              <span class="input-icon" data-lucide="search"></span>
+              <input type="text" id="vehicle-search-input" class="input-control" placeholder="Buscar por Placa, Modelo ou Marca...">
             </div>
 
-            <select id="vehicle-status-filter" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <select id="vehicle-status-filter" class="input-control" style="width: auto; min-width: 160px;">
               <option value="">Todos os Status</option>
               <option value="DISPONIVEL">Disponível</option>
               <option value="EM_VIAGEM">Em Viagem</option>
@@ -381,265 +762,292 @@ export class AdminWebController {
             </select>
           </div>
 
-          <button onclick="openCreateVehicleModal()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-cyan-500/20 transition flex items-center gap-2 shrink-0">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <button onclick="openCreateVehicleModal()" class="btn btn-cyan">
+            <span data-lucide="plus-circle" class="icon-sm"></span>
             <span>Novo Veículo</span>
           </button>
         </div>
 
-        <!-- Vehicles Table -->
-        <div class="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-          <div class="overflow-x-auto custom-scrollbar">
-            <table class="w-full text-left text-sm text-slate-300">
-              <thead class="bg-slate-900/90 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800 tracking-wider">
-                <tr>
-                  <th class="px-6 py-3.5">Placa</th>
-                  <th class="px-6 py-3.5">Modelo / Marca</th>
-                  <th class="px-6 py-3.5">Ano</th>
-                  <th class="px-6 py-3.5">Status</th>
-                  <th class="px-6 py-3.5">Motorista Vinculado</th>
-                  <th class="px-6 py-3.5 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="vehicles-table-body" class="divide-y divide-slate-800/60">
-                <tr>
-                  <td colspan="6" class="px-6 py-8 text-center text-slate-500">Carregando veículos...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <!-- Table -->
+        <div class="card table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Modelo / Marca</th>
+                <th>Ano</th>
+                <th>Status</th>
+                <th>Motorista Vinculado</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="vehicles-table-body">
+              <tr>
+                <td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando veículos...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
     </main>
   </div>
 
-  <!-- MODAL: CRIAR / EDITAR USUÁRIO -->
-  <div id="modal-user" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-2xl glass-card rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-        <h3 id="modal-user-title" class="text-base font-bold text-white">Novo Usuário</h3>
-        <button onclick="closeModal('modal-user')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <!-- MODAL: USUÁRIO -->
+  <div id="modal-user" class="modal-overlay hidden">
+    <div class="card modal-content">
+      <div class="modal-header">
+        <h3 id="modal-user-title" class="text-base font-bold">Novo Usuário</h3>
+        <button type="button" onclick="closeModal('modal-user')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
       </div>
 
-      <form id="form-user" class="p-6 space-y-4 overflow-y-auto custom-scrollbar">
-        <input type="hidden" id="user-form-id">
-
-        <!-- DADOS BÁSICOS -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="sm:col-span-2">
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Nome Completo *</label>
-            <input type="text" id="user-form-name" required placeholder="Ex: Carlos Eduardo de Souza" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-          </div>
+      <form id="form-user">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="user-form-id">
 
           <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">CPF *</label>
-            <input type="text" id="user-form-cpf" required placeholder="000.000.000-00" maxlength="14"
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <label>Nome Completo *</label>
+            <input type="text" id="user-form-name" class="input-control" required placeholder="Ex: Carlos Eduardo de Souza">
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Telefone</label>
-            <input type="text" id="user-form-phone" placeholder="(11) 99999-8888" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <div class="grid-2">
+            <div>
+              <label>CPF *</label>
+              <input type="text" id="user-form-cpf" class="input-control" required placeholder="000.000.000-00" maxlength="14">
+            </div>
+
+            <div>
+              <label>Telefone</label>
+              <input type="text" id="user-form-phone" class="input-control" placeholder="(11) 99999-8888">
+            </div>
           </div>
 
           <div id="user-form-pwd-container">
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Senha Inicial *</label>
-            <input type="password" id="user-form-password" placeholder="Mínimo 6 caracteres" minlength="6"
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <label>Senha Inicial *</label>
+            <input type="password" id="user-form-password" class="input-control" placeholder="Mínimo 6 caracteres" minlength="6">
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Perfil de Acesso *</label>
-            <select id="user-form-role" onchange="handleRoleChange()" required 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <option value="DRIVER">Motorista (DRIVER)</option>
-              <option value="MANAGER">Gerente (MANAGER)</option>
-              <option value="ADMIN">Administrador (ADMIN)</option>
-              <option value="OPERATOR">Operador (OPERATOR)</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Status *</label>
-            <select id="user-form-status" required 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <option value="ACTIVE">Ativo (ACTIVE)</option>
-              <option value="INACTIVE">Inativo (INACTIVE)</option>
-              <option value="BLOCKED">Bloqueado (BLOCKED)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- SEÇÃO MOTORISTA (APENAS SE ROLE = DRIVER) -->
-        <div id="driver-fields-section" class="pt-4 border-t border-slate-800 space-y-4">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
-              <i data-lucide="id-card" class="w-4 h-4"></i>
-              Dados Operacionais do Motorista
-            </h4>
-          </div>
-
-          <!-- DETECÇÃO DE MOTORISTA ERP -->
-          <div id="erp-detection-alert" class="hidden p-3.5 rounded-xl bg-purple-950/60 border border-purple-800/80 text-purple-200 text-xs flex items-start gap-2.5">
-            <i data-lucide="info" class="w-4 h-4 text-purple-400 shrink-0 mt-0.5"></i>
+          <div class="grid-2">
             <div>
-              <p class="font-semibold">Motorista compatível encontrado no ERP!</p>
-              <p class="mt-0.5 text-purple-300">Este cadastro será automaticamente vinculado ao registro existente para preservar o histórico contábil e de viagens.</p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">CNH</label>
-              <input type="text" id="user-form-cnh" placeholder="Número CNH" 
-                class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Categoria CNH</label>
-              <select id="user-form-cnh-cat" 
-                class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-                <option value="">Selecione...</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-                <option value="E">E</option>
-                <option value="AB">AB</option>
-                <option value="AC">AC</option>
-                <option value="AD">AD</option>
-                <option value="AE">AE</option>
+              <label>Perfil de Acesso *</label>
+              <select id="user-form-role" onchange="handleRoleChange()" class="input-control" required>
+                <option value="DRIVER">Motorista (DRIVER)</option>
+                <option value="MANAGER">Gerente (MANAGER)</option>
+                <option value="ADMIN">Administrador (ADMIN)</option>
+                <option value="OPERATOR">Operador (OPERATOR)</option>
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">RNTRC</label>
-              <input type="text" id="user-form-rntrc" placeholder="Registro RNTRC" 
-                class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <label>Status *</label>
+              <select id="user-form-status" class="input-control" required>
+                <option value="ACTIVE">Ativo (ACTIVE)</option>
+                <option value="INACTIVE">Inativo (INACTIVE)</option>
+                <option value="BLOCKED">Bloqueado (BLOCKED)</option>
+              </select>
             </div>
           </div>
 
-          <!-- VÍNCULO DE VEÍCULO -->
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Veículo Atual Alocado</label>
-            <select id="user-form-vehicle" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <option value="">Nenhum veículo vinculado (alocar depois)</option>
-            </select>
+          <!-- SEÇÃO MOTORISTA -->
+          <div id="driver-fields-section" style="padding-top: 1rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;">
+            <div class="flex items-center gap-2" style="color: var(--brand-light); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+              <span data-lucide="id-card" class="icon-sm"></span>
+              <span>Dados Operacionais do Motorista</span>
+            </div>
+
+            <div id="erp-detection-alert" class="badge badge-purple hidden" style="border-radius: 0.75rem; padding: 0.85rem; font-weight: normal; text-align: left; line-height: 1.4;">
+              <span data-lucide="info" class="icon-md" style="margin-right: 0.5rem; float: left;"></span>
+              <div>
+                <strong>Motorista compatível encontrado no ERP!</strong><br>
+                Este cadastro será automaticamente vinculado ao registro existente para preservar o histórico.
+              </div>
+            </div>
+
+            <div class="grid-3">
+              <div>
+                <label>CNH</label>
+                <input type="text" id="user-form-cnh" class="input-control" placeholder="Número CNH">
+              </div>
+
+              <div>
+                <label>Categoria</label>
+                <select id="user-form-cnh-cat" class="input-control">
+                  <option value="">Selecione...</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                  <option value="E">E</option>
+                  <option value="AB">AB</option>
+                  <option value="AC">AC</option>
+                  <option value="AD">AD</option>
+                  <option value="AE">AE</option>
+                </select>
+              </div>
+
+              <div>
+                <label>RNTRC</label>
+                <input type="text" id="user-form-rntrc" class="input-control" placeholder="Registro RNTRC">
+              </div>
+            </div>
+
+            <div>
+              <label>Veículo Atual Alocado</label>
+              <select id="user-form-vehicle" class="input-control">
+                <option value="">Nenhum veículo vinculado (alocar depois)</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="pt-4 border-t border-slate-800 flex justify-end gap-3">
-          <button type="button" onclick="closeModal('modal-user')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-sm transition">Cancelar</button>
-          <button type="submit" id="user-submit-btn" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-brand-500/25 transition">Salvar Usuário</button>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-user')" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="user-submit-btn" class="btn btn-primary">Salvar Usuário</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: RESET DE SENHA -->
-  <div id="modal-reset-pwd" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-md glass-card rounded-2xl border border-slate-800 shadow-2xl p-6 space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i data-lucide="key" class="w-5 h-5 text-amber-400"></i>
-          Redefinir Senha
+  <!-- MODAL: RESET SENHA -->
+  <div id="modal-reset-pwd" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="text-base font-bold flex items-center gap-2">
+          <span data-lucide="key" class="icon-sm" style="color: var(--amber-base);"></span>
+          <span>Redefinir Senha</span>
         </h3>
-        <button onclick="closeModal('modal-reset-pwd')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button type="button" onclick="closeModal('modal-reset-pwd')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
       </div>
 
-      <p class="text-xs text-slate-400">
-        Defina a nova senha para o usuário <strong id="reset-pwd-username" class="text-white"></strong>. 
-        Ao salvar, todas as sessões ativas no APK e Web serão revogadas imediatamente.
-      </p>
+      <form id="form-reset-pwd">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="reset-pwd-user-id">
 
-      <form id="form-reset-pwd" class="space-y-4">
-        <input type="hidden" id="reset-pwd-user-id">
+          <p class="text-xs" style="color: var(--text-secondary);">
+            Defina a nova senha para o usuário <strong id="reset-pwd-username" style="color: #fff;"></strong>. As sessões ativas serão invalidadas.
+          </p>
 
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Nova Senha *</label>
-          <input type="password" id="reset-new-password" required minlength="6" placeholder="Mínimo 6 caracteres" 
-            class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <div>
+            <label>Nova Senha *</label>
+            <input type="password" id="reset-new-password" class="input-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+          </div>
+
+          <div>
+            <label>Confirmar Nova Senha *</label>
+            <input type="password" id="reset-confirm-password" class="input-control" required minlength="6" placeholder="Repita a nova senha">
+          </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Confirmar Nova Senha *</label>
-          <input type="password" id="reset-confirm-password" required minlength="6" placeholder="Repita a senha" 
-            class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-        </div>
-
-        <div class="pt-2 flex justify-end gap-3">
-          <button type="button" onclick="closeModal('modal-reset-pwd')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-sm">Cancelar</button>
-          <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-amber-500/20">Confirmar Redefinição</button>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-reset-pwd')" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-warning">Confirmar Redefinição</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: NOVO VEÍCULO -->
-  <div id="modal-vehicle" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="w-full max-w-md glass-card rounded-2xl border border-slate-800 shadow-2xl p-6 space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 id="modal-vehicle-title" class="text-base font-bold text-white flex items-center gap-2">
-          <i data-lucide="truck" class="w-5 h-5 text-cyan-400"></i>
-          Novo Veículo
+  <!-- MODAL: VEÍCULO -->
+  <div id="modal-vehicle" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="modal-vehicle-title" class="text-base font-bold flex items-center gap-2">
+          <span data-lucide="truck" class="icon-sm" style="color: var(--cyan-base);"></span>
+          <span>Novo Veículo</span>
         </h3>
-        <button onclick="closeModal('modal-vehicle')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button type="button" onclick="closeModal('modal-vehicle')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
       </div>
 
-      <form id="form-vehicle" class="space-y-4">
-        <input type="hidden" id="vehicle-form-id">
+      <form id="form-vehicle">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="vehicle-form-id">
 
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Placa do Veículo *</label>
-          <input type="text" id="vehicle-form-plate" required placeholder="ABC-1234 ou ABC1D23" maxlength="8"
-            class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white uppercase text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-        </div>
+          <div>
+            <label>Placa do Veículo *</label>
+            <input type="text" id="vehicle-form-plate" class="input-control font-mono" required placeholder="ABC-1234 ou ABC1D23" maxlength="8" style="text-transform: uppercase;">
+          </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Modelo *</label>
-            <input type="text" id="vehicle-form-model" required placeholder="Ex: FH 540" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <div class="grid-2">
+            <div>
+              <label>Modelo *</label>
+              <input type="text" id="vehicle-form-model" class="input-control" required placeholder="Ex: FH 540">
+            </div>
+            <div>
+              <label>Marca *</label>
+              <input type="text" id="vehicle-form-brand" class="input-control" required placeholder="Ex: Volvo">
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Marca *</label>
-            <input type="text" id="vehicle-form-brand" required placeholder="Ex: Volvo" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-          </div>
-        </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Ano</label>
-            <input type="number" id="vehicle-form-year" placeholder="2023" min="1990" max="2030"
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold uppercase text-slate-300 mb-1.5">Status</label>
-            <select id="vehicle-form-status" 
-              class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <option value="DISPONIVEL">Disponível</option>
-              <option value="EM_VIAGEM">Em Viagem</option>
-              <option value="MANUTENCAO">Manutenção</option>
-            </select>
+          <div class="grid-2">
+            <div>
+              <label>Ano</label>
+              <input type="number" id="vehicle-form-year" class="input-control" placeholder="2023" min="1990" max="2030">
+            </div>
+            <div>
+              <label>Status</label>
+              <select id="vehicle-form-status" class="input-control">
+                <option value="DISPONIVEL">Disponível</option>
+                <option value="EM_VIAGEM">Em Viagem</option>
+                <option value="MANUTENCAO">Manutenção</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="pt-2 flex justify-end gap-3">
-          <button type="button" onclick="closeModal('modal-vehicle')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-sm">Cancelar</button>
-          <button type="submit" class="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-cyan-500/20">Salvar Veículo</button>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-vehicle')" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-cyan">Salvar Veículo</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- JAVASCRIPT APPLICATION CORE -->
+  <!-- JAVASCRIPT CORE & EMBEDDED ICONS -->
   <script>
-    // State
+    // INLINE SVG ICONS DICTIONARY (ZERO EXTERNAL CALLS)
+    const SVG_ICONS = {
+      'truck': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18.5" r="2.5"/><circle cx="7" cy="18.5" r="2.5"/></svg>',
+      'user': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      'lock': '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+      'eye': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+      'arrow-right': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+      'layout-dashboard': '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
+      'users': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+      'log-out': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>',
+      'refresh-cw': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
+      'check-circle': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+      'shield-alert': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      'user-check': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>',
+      'link-2-off': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7"/><path d="M15 7h2a5 5 0 0 1 4 8"/><line x1="8" x2="12" y1="12" y2="12"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
+      'user-plus': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>',
+      'plus-circle': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="16"/><line x1="8" x2="16" y1="12" y2="12"/></svg>',
+      'search': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>',
+      'x': '<svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>',
+      'id-card': '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M14 10h4"/><path d="M14 14h4"/></svg>',
+      'info': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>',
+      'key': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
+      'edit-2': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
+      'pause-circle': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/></svg>',
+      'play-circle': '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>',
+      'trash-2': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>',
+      'alert-triangle': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>'
+    };
+
+    function renderIcons(container = document) {
+      container.querySelectorAll('[data-lucide]').forEach(el => {
+        const iconName = el.getAttribute('data-lucide');
+        if (SVG_ICONS[iconName]) {
+          el.innerHTML = SVG_ICONS[iconName];
+        }
+      });
+    }
+
+    // STATE
     const STATE = {
       token: localStorage.getItem('hk_access_token'),
       refreshToken: localStorage.getItem('hk_refresh_token'),
@@ -651,7 +1059,6 @@ export class AdminWebController {
       unlinkedDrivers: [],
     };
 
-    // Formatters
     function formatCPF(cpf) {
       if (!cpf) return '-';
       const clean = cpf.replace(/\\D/g, '');
@@ -660,47 +1067,39 @@ export class AdminWebController {
     }
 
     function formatPhone(phone) {
-      if (!phone) return '-';
-      return phone;
+      return phone || '-';
     }
 
-    // Toast Notifications
+    // TOAST NOTIFICATIONS
     function showToast(msg, type = 'info') {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       
-      const colors = {
-        success: 'bg-emerald-950 border-emerald-800 text-emerald-200',
-        error: 'bg-rose-950 border-rose-800 text-rose-200',
-        info: 'bg-slate-900 border-slate-700 text-slate-200',
+      const typeClasses = {
+        success: 'toast-success',
+        error: 'toast-error',
+        info: 'toast-info',
       };
 
-      const icons = {
-        success: 'check-circle',
-        error: 'alert-triangle',
-        info: 'info',
-      };
+      const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-triangle' : 'info';
 
-      toast.className = \`p-4 rounded-xl border shadow-xl flex items-start gap-3 transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto \${colors[type] || colors.info}\`;
+      toast.className = \`toast \${typeClasses[type] || 'toast-info'}\`;
       toast.innerHTML = \`
-        <i data-lucide="\${icons[type] || 'info'}" class="w-5 h-5 shrink-0 mt-0.5"></i>
-        <div class="text-xs font-medium leading-relaxed">\${msg}</div>
+        <span data-lucide="\${iconName}" class="icon-md" style="flex-shrink: 0; margin-top: 2px;"></span>
+        <div style="flex: 1; line-height: 1.4;">\${msg}</div>
       \`;
 
       container.appendChild(toast);
-      lucide.createIcons({ root: toast });
+      renderIcons(toast);
 
       setTimeout(() => {
-        toast.classList.remove('translate-y-2', 'opacity-0');
-      }, 10);
-
-      setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 300);
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 250);
       }, 4000);
     }
 
-    // Authenticated API Fetch
+    // API REQUESTS
     async function apiFetch(endpoint, options = {}) {
       const headers = {
         'Content-Type': 'application/json',
@@ -715,7 +1114,6 @@ export class AdminWebController {
         const res = await fetch(endpoint, { ...options, headers });
 
         if (res.status === 401) {
-          // Token expired or invalid
           handleLogout();
           showToast('Sessão expirada. Faça login novamente.', 'error');
           throw new Error('Sessão expirada');
@@ -733,19 +1131,13 @@ export class AdminWebController {
       }
     }
 
-    // Navigation
+    // NAVIGATION
     function navigate(viewName) {
       STATE.currentView = viewName;
-      document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.remove('bg-brand-600', 'text-white');
-        el.classList.add('text-slate-300');
-      });
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
       const activeNav = document.getElementById(\`nav-\${viewName}\`);
-      if (activeNav) {
-        activeNav.classList.add('bg-brand-600', 'text-white');
-        activeNav.classList.remove('text-slate-300');
-      }
+      if (activeNav) activeNav.classList.add('active');
 
       document.getElementById('view-dashboard').classList.add('hidden');
       document.getElementById('view-users').classList.add('hidden');
@@ -774,12 +1166,12 @@ export class AdminWebController {
       }
     }
 
-    // Auth & Login
+    // AUTH & LOGIN
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = document.getElementById('login-submit-btn');
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Autenticando...</span>';
+      submitBtn.innerHTML = '<span class="spinner"></span><span>Autenticando...</span>';
 
       const username = document.getElementById('login-username').value.trim();
       const password = document.getElementById('login-password').value;
@@ -795,8 +1187,8 @@ export class AdminWebController {
           if (data.user.role !== 'ADMIN' && data.user.role !== 'MANAGER') {
             showToast('Acesso negado: Apenas administradores e gerentes podem acessar este painel.', 'error');
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Entrar no Painel</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
-            lucide.createIcons();
+            submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
+            renderIcons(submitBtn);
             return;
           }
 
@@ -817,8 +1209,8 @@ export class AdminWebController {
         showToast('Falha na comunicação com o servidor HK Central.', 'error');
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>Entrar no Painel</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
-        lucide.createIcons();
+        submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
+        renderIcons(submitBtn);
       }
     });
 
@@ -860,7 +1252,7 @@ export class AdminWebController {
       input.type = input.type === 'password' ? 'text' : 'password';
     });
 
-    // Load Dashboard Stats
+    // DASHBOARD
     async function loadDashboard() {
       try {
         const stats = await apiFetch('/api/v1/admin/dashboard');
@@ -873,22 +1265,21 @@ export class AdminWebController {
         document.getElementById('stat-erp-drivers').innerText = stats.erpOnlyDrivers ?? 0;
         document.getElementById('stat-total-vehicles').innerText = stats.totalVehicles ?? 0;
 
-        // Load Unlinked Drivers
         const unlinked = await apiFetch('/api/v1/admin/drivers/unlinked');
         STATE.unlinkedDrivers = unlinked;
         const unlinkedContainer = document.getElementById('unlinked-drivers-list');
         document.getElementById('erp-badge').innerText = \`\${unlinked.length} pendentes\`;
 
         if (!unlinked.length) {
-          unlinkedContainer.innerHTML = '<p class="text-xs text-slate-500 italic">Nenhum motorista pendente de vínculo.</p>';
+          unlinkedContainer.innerHTML = '<p class="text-xs" style="color: var(--text-muted); font-style: italic;">Nenhum motorista pendente de vínculo.</p>';
         } else {
           unlinkedContainer.innerHTML = unlinked.map(d => \`
-            <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-between">
+            <div style="padding: 0.65rem 0.85rem; border-radius: 0.75rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
               <div>
-                <span class="text-xs font-semibold text-white block">CNH: \${d.cnh || 'Não inf.'} (Cat \${d.cnhCategory || '-'})</span>
-                <span class="text-[10px] text-purple-400">RNTRC: \${d.rntrc || '-'}</span>
+                <span class="text-xs font-semibold block">CNH: \${d.cnh || 'Não inf.'} (Cat \${d.cnhCategory || '-'})</span>
+                <span class="text-xs" style="color: var(--purple-base); font-size: 11px;">RNTRC: \${d.rntrc || '-'}</span>
               </div>
-              <button onclick="openCreateUserForErpDriver('\${d.id}', '\${d.cnh || ''}', '\${d.cnhCategory || ''}', '\${d.rntrc || ''}')" class="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-200 text-xs font-medium transition">
+              <button onclick="openCreateUserForErpDriver('\${d.id}', '\${d.cnh || ''}', '\${d.cnhCategory || ''}', '\${d.rntrc || ''}')" class="btn btn-sm btn-secondary" style="color: var(--purple-base); border-color: var(--purple-border);">
                 Vincular Login
               </button>
             </div>
@@ -899,7 +1290,7 @@ export class AdminWebController {
       }
     }
 
-    // Load Users
+    // USERS
     async function loadUsers() {
       const search = document.getElementById('user-search-input')?.value || '';
       const role = document.getElementById('user-role-filter')?.value || '';
@@ -916,7 +1307,7 @@ export class AdminWebController {
         renderUsersTable(users);
       } catch (err) {
         document.getElementById('users-table-body').innerHTML = \`
-          <tr><td colspan="6" class="px-6 py-6 text-center text-rose-400 text-xs">Erro ao carregar usuários: \${err.message}</td></tr>
+          <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar usuários: \${err.message}</td></tr>
         \`;
       }
     }
@@ -924,75 +1315,71 @@ export class AdminWebController {
     function renderUsersTable(users) {
       const tbody = document.getElementById('users-table-body');
       if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500 text-xs">Nenhum usuário encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum usuário encontrado.</td></tr>';
         return;
       }
 
       tbody.innerHTML = users.map(user => {
-        const roleColors = {
-          ADMIN: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-          MANAGER: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-          DRIVER: 'bg-brand-500/10 text-brand-400 border-brand-500/20',
-          OPERATOR: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
+        const roleBadges = {
+          ADMIN: 'badge-danger',
+          MANAGER: 'badge-warning',
+          DRIVER: 'badge-brand',
+          OPERATOR: 'badge-muted',
         };
 
-        const statusColors = {
-          ACTIVE: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-          INACTIVE: 'bg-slate-700 text-slate-400 border-slate-600',
-          BLOCKED: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        const statusBadges = {
+          ACTIVE: 'badge-success',
+          INACTIVE: 'badge-muted',
+          BLOCKED: 'badge-danger',
         };
 
         const driverInfo = user.driver ? \`
           <div>
-            <span class="text-xs text-white font-medium block">CNH: \${user.driver.cnh || '-'} (Cat \${user.driver.cnhCategory || '-'})</span>
-            <span class="text-[11px] text-slate-400">Veículo: \${user.driver.assignments?.[0]?.vehicle?.plate || 'Sem veículo'}</span>
+            <span class="text-xs font-semibold block">CNH: \${user.driver.cnh || '-'} (Cat \${user.driver.cnhCategory || '-'})</span>
+            <span class="text-xs" style="color: var(--text-secondary); font-size: 11px;">Veículo: \${user.driver.assignments?.[0]?.vehicle?.plate || 'Sem veículo'}</span>
           </div>
-        \` : '<span class="text-xs text-slate-500">-</span>';
+        \` : '<span class="text-xs" style="color: var(--text-muted);">-</span>';
 
         return \`
-          <tr class="hover:bg-slate-900/60 transition">
-            <td class="px-6 py-4">
-              <div class="font-semibold text-white text-sm">\${user.name}</div>
-              <div class="text-xs text-slate-400">ID: \${user.id.substring(0, 8)}...</div>
+          <tr>
+            <td>
+              <div class="font-semibold text-sm">\${user.name}</div>
+              <div class="text-xs" style="color: var(--text-muted);">ID: \${user.id.substring(0, 8)}...</div>
             </td>
-            <td class="px-6 py-4">
-              <div class="text-xs font-mono text-slate-200">\${formatCPF(user.cpf)}</div>
-              <div class="text-xs text-slate-400">\${formatPhone(user.phone)}</div>
+            <td>
+              <div class="text-xs font-mono">\${formatCPF(user.cpf)}</div>
+              <div class="text-xs" style="color: var(--text-secondary);">\${formatPhone(user.phone)}</div>
             </td>
-            <td class="px-6 py-4">
-              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full border \${roleColors[user.role] || ''}">
-                \${user.role}
-              </span>
+            <td>
+              <span class="badge \${roleBadges[user.role] || 'badge-muted'}">\${user.role}</span>
             </td>
-            <td class="px-6 py-4">
-              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full border \${statusColors[user.status] || ''}">
-                \${user.status}
-              </span>
+            <td>
+              <span class="badge \${statusBadges[user.status] || 'badge-muted'}">\${user.status}</span>
             </td>
-            <td class="px-6 py-4">\${driverInfo}</td>
-            <td class="px-6 py-4 text-right">
-              <div class="flex items-center justify-end gap-1.5">
-                <button onclick="openEditUserModal('\${user.id}')" title="Editar" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-                  <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+            <td>\${driverInfo}</td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="openEditUserModal('\${user.id}')" title="Editar" class="btn btn-secondary btn-icon">
+                  <span data-lucide="edit-2" class="icon-xs"></span>
                 </button>
-                <button onclick="toggleUserStatus('\${user.id}', '\${user.status}')" title="\${user.status === 'ACTIVE' ? 'Desativar' : 'Ativar'}" class="p-1.5 rounded-lg \${user.status === 'ACTIVE' ? 'bg-amber-950/40 hover:bg-amber-900 text-amber-300' : 'bg-emerald-950/40 hover:bg-emerald-900 text-emerald-300'} transition">
-                  <i data-lucide="\${user.status === 'ACTIVE' ? 'pause-circle' : 'play-circle'}" class="w-3.5 h-3.5"></i>
+                <button onclick="toggleUserStatus('\${user.id}', '\${user.status}')" title="\${user.status === 'ACTIVE' ? 'Desativar' : 'Ativar'}" class="btn \${user.status === 'ACTIVE' ? 'btn-ghost-warning' : 'btn-ghost-success'} btn-icon">
+                  <span data-lucide="\${user.status === 'ACTIVE' ? 'pause-circle' : 'play-circle'}" class="icon-xs"></span>
                 </button>
-                <button onclick="openResetPasswordModal('\${user.id}', '\${user.name}')" title="Redefinir Senha" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 transition">
-                  <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                <button onclick="openResetPasswordModal('\${user.id}', '\${user.name}')" title="Redefinir Senha" class="btn btn-secondary btn-icon" style="color: var(--amber-base);">
+                  <span data-lucide="key" class="icon-xs"></span>
                 </button>
-                <button onclick="deleteUserSafely('\${user.id}', '\${user.name}')" title="Excluir / Desativar" class="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900 text-rose-400 transition">
-                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <button onclick="deleteUserSafely('\${user.id}', '\${user.name}')" title="Excluir / Desativar" class="btn btn-ghost-danger btn-icon">
+                  <span data-lucide="trash-2" class="icon-xs"></span>
                 </button>
               </div>
             </td>
           </tr>
         \`;
       }).join('');
-      lucide.createIcons({ root: tbody });
+      renderIcons(tbody);
     }
 
-    // Load Vehicles
+    // VEHICLES
     async function loadVehicles() {
       const search = document.getElementById('vehicle-search-input')?.value || '';
       const status = document.getElementById('vehicle-status-filter')?.value || '';
@@ -1007,7 +1394,7 @@ export class AdminWebController {
         renderVehiclesTable(vehicles);
       } catch (err) {
         document.getElementById('vehicles-table-body').innerHTML = \`
-          <tr><td colspan="6" class="px-6 py-6 text-center text-rose-400 text-xs">Erro ao carregar veículos: \${err.message}</td></tr>
+          <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar veículos: \${err.message}</td></tr>
         \`;
       }
     }
@@ -1015,38 +1402,36 @@ export class AdminWebController {
     function renderVehiclesTable(vehicles) {
       const tbody = document.getElementById('vehicles-table-body');
       if (!vehicles.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500 text-xs">Nenhum veículo cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum veículo cadastrado.</td></tr>';
         return;
       }
 
       tbody.innerHTML = vehicles.map(v => {
         const driverName = v.assignments?.[0]?.driver?.user?.name || (v.assignments?.[0]?.driver ? 'Motorista sem nome' : 'Nenhum');
         return \`
-          <tr class="hover:bg-slate-900/60 transition">
-            <td class="px-6 py-4 font-mono font-bold text-white text-sm">\${v.plate}</td>
-            <td class="px-6 py-4 text-sm text-slate-200">\${v.brand} \${v.model}</td>
-            <td class="px-6 py-4 text-xs text-slate-400">\${v.year || '-'}</td>
-            <td class="px-6 py-4">
-              <span class="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                \${v.status}
-              </span>
+          <tr>
+            <td class="font-mono font-bold text-sm" style="letter-spacing: 0.05em;">\${v.plate}</td>
+            <td class="text-sm">\${v.brand} \${v.model}</td>
+            <td class="text-xs" style="color: var(--text-secondary);">\${v.year || '-'}</td>
+            <td>
+              <span class="badge badge-cyan">\${v.status}</span>
             </td>
-            <td class="px-6 py-4 text-xs text-slate-300">\${driverName}</td>
-            <td class="px-6 py-4 text-right">
-              <button onclick="openEditVehicleModal('\${v.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+            <td class="text-xs" style="color: var(--text-secondary);">\${driverName}</td>
+            <td class="text-right">
+              <button onclick="openEditVehicleModal('\${v.id}')" title="Editar" class="btn btn-secondary btn-icon">
+                <span data-lucide="edit-2" class="icon-xs"></span>
               </button>
             </td>
           </tr>
         \`;
       }).join('');
-      lucide.createIcons({ root: tbody });
+      renderIcons(tbody);
     }
 
-    // Modal Handlers
+    // MODAL HELPERS
     function openModal(id) {
       document.getElementById(id).classList.remove('hidden');
-      lucide.createIcons();
+      renderIcons(document.getElementById(id));
     }
 
     function closeModal(id) {
@@ -1082,6 +1467,7 @@ export class AdminWebController {
       document.getElementById('modal-user-title').innerText = 'Novo Usuário';
       document.getElementById('form-user').reset();
       document.getElementById('user-form-id').value = '';
+      document.getElementById('user-form-cpf').disabled = false;
       document.getElementById('user-form-pwd-container').classList.remove('hidden');
       document.getElementById('user-form-password').required = true;
       document.getElementById('user-form-role').value = defaultRole;
@@ -1107,12 +1493,11 @@ export class AdminWebController {
         document.getElementById('user-form-id').value = user.id;
         document.getElementById('user-form-name').value = user.name;
         document.getElementById('user-form-cpf').value = user.cpf;
-        document.getElementById('user-form-cpf').disabled = true; // CPF imutável na edição direta
+        document.getElementById('user-form-cpf').disabled = true;
         document.getElementById('user-form-phone').value = user.phone || '';
         document.getElementById('user-form-role').value = user.role;
         document.getElementById('user-form-status').value = user.status;
 
-        // Ocultar campo de senha no formulário de edição (usar modal de reset)
         document.getElementById('user-form-pwd-container').classList.add('hidden');
         document.getElementById('user-form-password').required = false;
 
@@ -1132,7 +1517,7 @@ export class AdminWebController {
       }
     }
 
-    // Save User (Create or Update)
+    // FORM USER SUBMIT
     document.getElementById('form-user').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('user-form-id').value;
@@ -1178,7 +1563,7 @@ export class AdminWebController {
       }
     });
 
-    // Toggle Status
+    // USER STATUS TOGGLE
     async function toggleUserStatus(id, currentStatus) {
       const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
       const actionLabel = newStatus === 'ACTIVE' ? 'ativar' : 'desativar';
@@ -1197,7 +1582,7 @@ export class AdminWebController {
       }
     }
 
-    // Reset Password
+    // RESET PASSWORD
     function openResetPasswordModal(id, name) {
       document.getElementById('reset-pwd-user-id').value = id;
       document.getElementById('reset-pwd-username').innerText = name;
@@ -1228,9 +1613,9 @@ export class AdminWebController {
       }
     });
 
-    // Delete / Soft-Deactivate User
+    // DELETE USER SAFELY
     async function deleteUserSafely(id, name) {
-      if (!confirm(\`ATENÇÃO: Deseja realmente excluir ou desativar o usuário "\${name}"?\\n\\nSe houver viagens ou fechamentos registrados, a conta será inativada com segurança para preservar o histórico fiscal e contábil.\`)) {
+      if (!confirm(\`ATENÇÃO: Deseja realmente excluir ou desativar o usuário "\${name}"?\\n\\nSe houver viagens ou fechamentos registrados, a conta será inativada com segurança para preservar o histórico.\`)) {
         return;
       }
 
@@ -1245,7 +1630,7 @@ export class AdminWebController {
       }
     }
 
-    // Vehicle Modal & Actions
+    // VEHICLES MODAL & ACTIONS
     function openCreateVehicleModal() {
       document.getElementById('modal-vehicle-title').innerText = 'Novo Veículo';
       document.getElementById('form-vehicle').reset();
@@ -1303,7 +1688,7 @@ export class AdminWebController {
       }
     });
 
-    // Auto format CPF on type
+    // Auto format CPF
     document.getElementById('user-form-cpf')?.addEventListener('input', (e) => {
       let v = e.target.value.replace(/\\D/g, '');
       if (v.length > 11) v = v.substring(0, 11);
@@ -1328,9 +1713,9 @@ export class AdminWebController {
       });
     });
 
-    // Initial Startup
+    // STARTUP
     document.addEventListener('DOMContentLoaded', () => {
-      lucide.createIcons();
+      renderIcons(document);
       if (STATE.token && STATE.user) {
         showApp();
       }
