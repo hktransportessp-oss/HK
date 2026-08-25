@@ -1047,11 +1047,29 @@ export class AdminWebController {
       });
     }
 
+    // SAFE LOCALSTORAGE HELPERS
+    function getStoredItem(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getStoredJson(key) {
+      try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
     // STATE
     const STATE = {
-      token: localStorage.getItem('hk_access_token'),
-      refreshToken: localStorage.getItem('hk_refresh_token'),
-      user: JSON.parse(localStorage.getItem('hk_user') || 'null'),
+      token: getStoredItem('hk_access_token'),
+      refreshToken: getStoredItem('hk_refresh_token'),
+      user: getStoredJson('hk_user'),
       currentView: 'dashboard',
       users: [],
       vehicles: [],
@@ -1179,6 +1197,18 @@ export class AdminWebController {
 
       const username = (document.getElementById('login-username')?.value || '').trim();
       const password = document.getElementById('login-password')?.value || '';
+
+      if (!username || !password) {
+        showToast('Informe o CPF/Telefone e a senha.', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Entrar no Painel</span><span data-lucide="arrow-right" class="icon-sm"></span>';
+          renderIcons(submitBtn);
+        }
+        return;
+      }
+
+      console.log('[ADMIN] enviando POST /api/v1/auth/login');
 
       try {
         const res = await fetch('/api/v1/auth/login', {
@@ -1712,11 +1742,25 @@ export class AdminWebController {
       console.log('[ADMIN] script carregado');
 
       const loginForm = document.getElementById('login-form');
+      const submitBtn = document.getElementById('login-submit-btn');
+
       if (!loginForm) {
         console.error('[ADMIN] login-form não encontrado');
       } else {
-        console.log('[ADMIN] login-form encontrado:', true);
+        console.log('[ADMIN] login-form encontrado');
         loginForm.addEventListener('submit', handleLogin);
+      }
+
+      if (submitBtn) {
+        submitBtn.addEventListener('click', (e) => {
+          // Se o botão for clicado, garante o submit do form
+          if (loginForm && !loginForm.checkValidity()) {
+            return; // Permite que a validação HTML nativa exiba campos obrigatórios
+          }
+          if (e && e.type === 'click' && loginForm) {
+            // submit event dispara naturalmente ou handleLogin pode ser invocado
+          }
+        });
       }
 
       const togglePwdBtn = document.getElementById('toggle-pwd-btn');
@@ -1784,6 +1828,10 @@ export class AdminWebController {
 </body>
 </html>`;
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   }

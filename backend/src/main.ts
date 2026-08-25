@@ -29,12 +29,21 @@ async function bootstrap() {
     // 3. Ativação de Graceful Shutdown Hooks (SIGTERM, SIGINT)
     app.enableShutdownHooks();
 
-    // 4. Headers de segurança HTTP (Helmet)
+    // 4. Headers de segurança HTTP (Helmet) e desabilitação de cache para /admin
     app.use(
       helmet({
         crossOriginResourcePolicy: { policy: 'cross-origin' },
       }),
     );
+
+    // Desabilitar completamente o cache das rotas /admin para impedir execução de JavaScript obsoleto
+    app.use('/admin', (req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+      next();
+    });
 
     // 5. Configuração de CORS segura por ambiente
     const corsOrigin = config.CORS_ORIGIN

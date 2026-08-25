@@ -8,15 +8,13 @@ describe('AdminWebController', () => {
     controller = new AdminWebController();
   });
 
-  it('should render HTML page with 200 and correct elements', () => {
+  it('should render HTML page with 200, no-cache headers, and correct elements', () => {
     let sentHtml = '';
-    let setHeaderKey = '';
-    let setHeaderVal = '';
+    const headers: Record<string, string> = {};
 
     const mockRes: any = {
       setHeader: (key: string, val: string) => {
-        setHeaderKey = key;
-        setHeaderVal = val;
+        headers[key] = val;
       },
       send: (body: string) => {
         sentHtml = body;
@@ -25,8 +23,11 @@ describe('AdminWebController', () => {
 
     controller.serveAdminApp(mockRes);
 
-    expect(setHeaderKey).toBe('Content-Type');
-    expect(setHeaderVal).toContain('text/html');
+    expect(headers['Content-Type']).toContain('text/html');
+    expect(headers['Cache-Control']).toBe('no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    expect(headers['Pragma']).toBe('no-cache');
+    expect(headers['Expires']).toBe('0');
+    expect(headers['Surrogate-Control']).toBe('no-store');
     expect(sentHtml).toContain('id="login-form"');
     expect(sentHtml).toContain('id="login-username"');
     expect(sentHtml).toContain('id="login-password"');
