@@ -19,13 +19,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.UserProfileEntity
 import com.example.ui.theme.*
 
 @Composable
 fun ProfileScreen(
+    userProfile: UserProfileEntity? = null,
     onLogoutClick: () -> Unit,
     onNavigateToSendToll: () -> Unit
 ) {
+    val displayName = userProfile?.name?.ifBlank { "Motorista" } ?: "Motorista"
+    val displayCpf = if (userProfile?.cpf?.isNotBlank() == true) "CPF: ${userProfile.cpf}" else ""
+    val displayPhone = if (userProfile?.phone?.isNotBlank() == true) "Telefone: ${userProfile.phone}" else ""
+    val displayVehicle = if (userProfile?.truckPlate?.isNotBlank() == true) {
+        "Placa: ${userProfile.truckPlate}${if (userProfile.truckModel.isNotBlank()) " (${userProfile.truckModel})" else ""}"
+    } else {
+        "Nenhum veículo vinculado"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,17 +81,19 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "João Silva",
+                    text = displayName,
                     style = MaterialTheme.typography.titleLarge,
                     color = SurfaceContainerLowest,
                     fontWeight = FontWeight.Bold
                 )
 
-                Text(
-                    text = "CPF: 123.456.789-00 • CNH: 98765432100",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SurfaceVariant
-                )
+                if (displayCpf.isNotBlank() || displayPhone.isNotBlank()) {
+                    Text(
+                        text = listOf(displayCpf, displayPhone).filter { it.isNotBlank() }.joinToString(" • "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SurfaceVariant
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -100,7 +113,7 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Placa: ABC-1234 (Volvo FH 540)",
+                            text = displayVehicle,
                             style = MaterialTheme.typography.labelSmall,
                             color = SurfaceContainerLowest,
                             fontWeight = FontWeight.Medium
@@ -133,7 +146,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.AccountBalance,
                     title = "Dados Bancários & PIX",
-                    subtitle = "Itaú - Chave CPF",
+                    subtitle = "Chave vinculada ao CPF",
                     onClick = { }
                 )
                 HorizontalDivider(color = SurfaceVariant)
@@ -146,8 +159,8 @@ fun ProfileScreen(
                 HorizontalDivider(color = SurfaceVariant)
                 ProfileMenuItem(
                     icon = Icons.Default.LocalShipping,
-                    title = "Dados do Veículo & ANTT",
-                    subtitle = "Volvo FH 540 • RNTRC 8493021",
+                    title = "Dados do Veículo",
+                    subtitle = if (userProfile?.truckPlate?.isNotBlank() == true) "${userProfile.truckPlate} - ${userProfile.truckModel}" else "Não cadastrado",
                     onClick = { }
                 )
                 HorizontalDivider(color = SurfaceVariant)

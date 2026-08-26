@@ -26,8 +26,8 @@ import com.example.ui.theme.*
 
 @Composable
 fun HomeScreen(
-    driverName: String = "João, João",
-    truckInfo: String = "Scania R450 - ABC-1234",
+    driverName: String = "Motorista",
+    truckInfo: String = "",
     currentFechamento: FechamentoEntity? = null,
     onNavigateToSendRomaneio: () -> Unit,
     onNavigateToTrips: () -> Unit,
@@ -35,6 +35,9 @@ fun HomeScreen(
     onNavigateToFechamentos: () -> Unit,
     onNavigateToPayments: () -> Unit
 ) {
+    val displayName = if (driverName.isNotBlank()) driverName else "Motorista"
+    val displayTruck = if (truckInfo.isNotBlank() && truckInfo != " - ") truckInfo else "Veículo não vinculado"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,13 +76,13 @@ fun HomeScreen(
 
                 Column {
                     Text(
-                        text = "Olá, $driverName",
+                        text = "Olá, $displayName",
                         style = MaterialTheme.typography.titleLarge,
                         color = SurfaceContainerLowest,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = truckInfo,
+                        text = displayTruck,
                         style = MaterialTheme.typography.bodyMedium,
                         color = OnPrimaryNavyContainer
                     )
@@ -90,12 +93,17 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Saldo a Receber
+        val totalAmount = currentFechamento?.totalNet ?: 0.0
+        val valorPrevisto = currentFechamento?.tripsValue ?: 0.0
+        val valorAprovado = currentFechamento?.totalGross ?: 0.0
+        val valorPago = if (currentFechamento?.status == "PAGO") currentFechamento.totalNet else 0.0
+
         FinancialCard(
             title = "Saldo a Receber",
-            amount = 4850.00,
-            previsto = 1200.00,
-            aprovado = 3650.00,
-            pago = 2400.00
+            amount = totalAmount,
+            previsto = valorPrevisto,
+            aprovado = valorAprovado,
+            pago = valorPago
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -124,71 +132,91 @@ fun HomeScreen(
                             letterSpacing = 0.5.sp
                         )
                         Text(
-                            text = currentFechamento?.period ?: "01/08 a 15/08",
+                            text = currentFechamento?.period ?: "Nenhum fechamento em aberto",
                             style = MaterialTheme.typography.titleMedium,
                             color = PrimaryNavy,
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    StatusBadge(status = currentFechamento?.status ?: "EM ANDAMENTO")
+                    StatusBadge(status = currentFechamento?.status ?: "SEM FECHAMENTO")
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocalShipping,
-                        contentDescription = null,
-                        tint = OutlineColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "${currentFechamento?.tripsCount ?: 7} Viagens processadas",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OnSurfaceDark
-                    )
-                }
+                if (currentFechamento != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            tint = OutlineColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "${currentFechamento.tripsCount} Viagens processadas",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OnSurfaceDark
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.HourglassEmpty,
-                        contentDescription = null,
-                        tint = OutlineColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "2 aguardando",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OnSurfaceDark
-                    )
-                }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = OutlineColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "${currentFechamento.invoicesCount} NF-es no período",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OnSurfaceDark
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = SecondaryOrangeContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "1 romaneio pendente",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SecondaryOrangeContainer,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (currentFechamento.hasDivergence) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = SecondaryOrangeContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = currentFechamento.divergenceMessage.ifBlank { "1 pendência para conferência" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SecondaryOrangeContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = OutlineColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Nenhum fechamento ativo no momento.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OnSurfaceVariant
+                        )
+                    }
                 }
             }
         }

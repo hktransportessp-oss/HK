@@ -38,9 +38,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository = LogisticsRepository(database.logisticsDao(), application)
         authRepository = AuthRepository(application, database.logisticsDao())
         viewModelScope.launch {
-            repository.seedInitialDataIfEmpty()
-            repository.refreshTripsFromRemote()
-            repository.processPendingSyncQueue()
+            authRepository.purgeLegacyDemoData()
+            repository.purgeLegacyDemoData()
+            if (authRepository.hasActiveSession()) {
+                repository.refreshTripsFromRemote()
+                repository.processPendingSyncQueue()
+            }
         }
     }
 
@@ -191,19 +194,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _activeTab.value = "home"
                     onResult(true)
                 } else {
-                    val profile = userProfile.value ?: UserProfileEntity(
-                        cpf = cpf,
-                        name = "João da Silva",
-                        phone = "(11) 98765-4321",
-                        truckModel = "Volvo FH 540",
-                        truckPlate = "ABC-1234",
-                        avatarUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuCY4aOhJdXtyk551zTOZSjh9icmjoZcrNG9iBYsOXku7MeB5aOHvWxq_6gMjDmu-Uh03NIP8jDgcL5X1obduYCNjmJo159Cf2ZA4HMXnWYNnN15JJoxuvnm9rnrdtU73QykpX7FerRwXg03c01xLOATx7zqpOIDirE259AIaDLTNKshpf7ENDFGQfUuXUhko4fshrvH_XpWrDJfA51H9KuX4ZZjOUuWs_0wVs7hfuCWJ1sR7T9ttAPCZg",
-                        isLoggedIn = true
-                    )
-                    repository.updateUserProfile(profile.copy(isLoggedIn = true))
-                    _currentScreen.value = Screen.Home
-                    _activeTab.value = "home"
-                    onResult(true)
+                    onResult(false)
                 }
             } else {
                 onResult(false)
@@ -233,10 +224,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val newRomaneio = RomaneioEntity(
                 id = romId,
-                operation = "Operação Especial SP/Interior",
+                operation = "Operação HK Transportes",
                 sentDate = date,
                 sentTime = time,
-                driver = userProfile.value?.name ?: "João Silva",
+                driver = userProfile.value?.name ?: "",
                 fileName = if (attachedFiles.isNotEmpty()) attachedFiles.first() else "doc_romaneio_$randomNum.pdf",
                 notes = notes,
                 currentStep = 2

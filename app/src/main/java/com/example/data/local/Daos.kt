@@ -132,4 +132,35 @@ interface LogisticsDao {
 
     @Query("UPDATE user_profile SET isLoggedIn = :isLoggedIn WHERE cpf = :cpf")
     suspend fun setLoggedInState(cpf: String, isLoggedIn: Boolean)
+
+    // Data purge and clearing operations for session change and demo data removal
+    @Query("DELETE FROM trips")
+    suspend fun clearTrips()
+
+    @Query("DELETE FROM deliveries")
+    suspend fun clearDeliveries()
+
+    @Query("DELETE FROM invoices")
+    suspend fun clearInvoices()
+
+    @Query("DELETE FROM occurrences")
+    suspend fun clearOccurrences()
+
+    @Query("DELETE FROM romaneios")
+    suspend fun clearRomaneios()
+
+    @Query("DELETE FROM tolls")
+    suspend fun clearTolls()
+
+    @Query("DELETE FROM fechamentos")
+    suspend fun clearFechamentos()
+
+    @Query("DELETE FROM notifications")
+    suspend fun clearNotifications()
+
+    @Query("DELETE FROM user_profile")
+    suspend fun clearUserProfile()
+
+    @Query("DELETE FROM user_profile WHERE cpf = '389.201.849-10' OR cpf = '38920184910' OR name LIKE '%João%'")
+    suspend fun purgeDemoProfiles()
 }

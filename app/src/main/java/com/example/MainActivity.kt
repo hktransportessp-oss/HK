@@ -44,8 +44,12 @@ fun HKConnectApp() {
     val viewModel: MainViewModel = viewModel()
 
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-    val isLoggedIn = userProfile?.isLoggedIn ?: true
-    val driverName = userProfile?.name ?: "João Silva"
+    val isLoggedIn = userProfile?.isLoggedIn ?: false
+    val driverName = userProfile?.name ?: ""
+    val truckInfo = listOfNotNull(
+        userProfile?.truckModel?.ifBlank { null },
+        userProfile?.truckPlate?.ifBlank { null }
+    ).joinToString(" - ").ifBlank { "Veículo não vinculado" }
 
     val romaneios by viewModel.romaneios.collectAsStateWithLifecycle()
     val trips by viewModel.trips.collectAsStateWithLifecycle()
@@ -70,7 +74,7 @@ fun HKConnectApp() {
             if (showTopBar) {
                 HKTopAppBar(
                     driverName = driverName,
-                    truckInfo = "${userProfile?.truckModel ?: "Scania R450"} - ${userProfile?.truckPlate ?: "ABC-1234"}",
+                    truckInfo = truckInfo,
                     avatarUrl = userProfile?.avatarUrl ?: "",
                     unreadNotifications = notifications.isNotEmpty(),
                     onAvatarClick = { navController.navigate("profile") },
@@ -119,9 +123,11 @@ fun HKConnectApp() {
             composable("login") {
                 LoginScreen(
                     onLoginSuccess = { phone, password, remember ->
-                        viewModel.login(phone, password, remember) {
-                            navController.navigate("home") {
-                                popUpTo("login") { inclusive = true }
+                        viewModel.login(phone, password, remember) { success ->
+                            if (success) {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
                             }
                         }
                     }
@@ -131,7 +137,7 @@ fun HKConnectApp() {
             composable("home") {
                 HomeScreen(
                     driverName = driverName,
-                    truckInfo = "${userProfile?.truckModel ?: "Scania R450"} - ${userProfile?.truckPlate ?: "ABC-1234"}",
+                    truckInfo = truckInfo,
                     currentFechamento = fechamentos.firstOrNull(),
                     onNavigateToSendRomaneio = { navController.navigate("send_romaneio") },
                     onNavigateToTrips = { navController.navigate("trips") },
@@ -259,7 +265,7 @@ fun HKConnectApp() {
             composable("send_romaneio") {
                 SendRomaneioScreen(
                     driverName = driverName,
-                    truckPlate = userProfile?.truckPlate ?: "ABC-1234",
+                    truckPlate = userProfile?.truckPlate ?: "",
                     onSubmitRomaneio = { notes, files ->
                         viewModel.submitRomaneio(notes, files) { romId ->
                             selectedRomaneioId = romId
@@ -313,6 +319,7 @@ fun HKConnectApp() {
 
             composable("profile") {
                 ProfileScreen(
+                    userProfile = userProfile,
                     onLogoutClick = {
                         viewModel.logout()
                         navController.navigate("login") {

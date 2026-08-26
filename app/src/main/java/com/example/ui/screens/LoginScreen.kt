@@ -31,8 +31,8 @@ import com.example.ui.theme.*
 fun LoginScreen(
     onLoginSuccess: (cpf: String, password: String, remember: Boolean) -> Unit
 ) {
-    var cpf by remember { mutableStateOf("123.456.789-00") }
-    var senha by remember { mutableStateOf("••••••••") }
+    var cpf by remember { mutableStateOf("") }
+    var senha by remember { mutableStateOf("") }
     var rememberAccess by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf("") }
 

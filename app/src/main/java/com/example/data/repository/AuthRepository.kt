@@ -44,8 +44,19 @@ class AuthRepository(
                 val driver = authData.driver
                 val vehicle = authData.vehicle
 
-                val truckModel = vehicle?.let { "${it.brand} ${it.model}" } ?: "Volvo FH 540"
-                val truckPlate = vehicle?.plate ?: "ABC-1234"
+                val truckModel = vehicle?.let { "${it.brand} ${it.model}".trim() } ?: ""
+                val truckPlate = vehicle?.plate ?: ""
+
+                // Purge any stale demo or prior session data from Room on fresh login
+                logisticsDao.clearTrips()
+                logisticsDao.clearDeliveries()
+                logisticsDao.clearInvoices()
+                logisticsDao.clearOccurrences()
+                logisticsDao.clearRomaneios()
+                logisticsDao.clearTolls()
+                logisticsDao.clearFechamentos()
+                logisticsDao.clearNotifications()
+                logisticsDao.clearUserProfile()
 
                 tokenManager.saveUserProfile(
                     userId = user.id,
@@ -69,10 +80,11 @@ class AuthRepository(
                 logisticsDao.insertUserProfile(userProfileEntity)
                 Result.success(userProfileEntity)
             } else {
-                Result.failure(Exception("Falha na autenticação remota: ${response.code()}"))
+                val errorMsg = if (response.code() == 401) "Credenciais inválidas. Verifique seu CPF e senha." else "Falha na autenticação: ${response.code()}"
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            // Fallback for offline login if session/user exists locally
+            // Fallback for offline login ONLY if an existing matching user session exists locally
             if (tokenManager.hasActiveSession()) {
                 val cachedCpf = tokenManager.getUserCpf()
                 val profile = logisticsDao.getUserProfileByCpf(cachedCpf)
@@ -93,11 +105,30 @@ class AuthRepository(
         } catch (_: Exception) {
             // Ignore network errors on logout
         } finally {
-            val cpf = tokenManager.getUserCpf()
-            if (cpf.isNotBlank()) {
-                logisticsDao.setLoggedInState(cpf, false)
-            }
+            logisticsDao.clearUserProfile()
+            logisticsDao.clearTrips()
+            logisticsDao.clearDeliveries()
+            logisticsDao.clearInvoices()
+            logisticsDao.clearOccurrences()
+            logisticsDao.clearRomaneios()
+            logisticsDao.clearTolls()
+            logisticsDao.clearFechamentos()
             tokenManager.clearTokensAndSession()
+        }
+    }
+
+    suspend fun purgeLegacyDemoData() = withContext(Dispatchers.IO) {
+        logisticsDao.purgeDemoProfiles()
+        if (tokenManager.getUserCpf() == "389.201.849-10" || tokenManager.getUserCpf() == "38920184910" || tokenManager.getUserName() == "João da Silva") {
+            tokenManager.clearTokensAndSession()
+            logisticsDao.clearUserProfile()
+            logisticsDao.clearTrips()
+            logisticsDao.clearDeliveries()
+            logisticsDao.clearInvoices()
+            logisticsDao.clearOccurrences()
+            logisticsDao.clearRomaneios()
+            logisticsDao.clearTolls()
+            logisticsDao.clearFechamentos()
         }
     }
 

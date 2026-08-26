@@ -59,15 +59,15 @@ class TokenManager(context: Context) {
 
     fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
 
-    fun getUserName(): String = prefs.getString(KEY_USER_NAME, "João Silva") ?: "João Silva"
+    fun getUserName(): String = prefs.getString(KEY_USER_NAME, "") ?: ""
 
     fun getUserCpf(): String = prefs.getString(KEY_USER_CPF, "") ?: ""
 
-    fun getUserPhone(): String = prefs.getString(KEY_USER_PHONE, "(11) 98765-4321") ?: "(11) 98765-4321"
+    fun getUserPhone(): String = prefs.getString(KEY_USER_PHONE, "") ?: ""
 
-    fun getTruckModel(): String = prefs.getString(KEY_TRUCK_MODEL, "Volvo FH 540") ?: "Volvo FH 540"
+    fun getTruckModel(): String = prefs.getString(KEY_TRUCK_MODEL, "") ?: ""
 
-    fun getTruckPlate(): String = prefs.getString(KEY_TRUCK_PLATE, "ABC-1234") ?: "ABC-1234"
+    fun getTruckPlate(): String = prefs.getString(KEY_TRUCK_PLATE, "") ?: ""
 
     fun hasActiveSession(): Boolean {
         return !getAccessToken().isNull_or_empty_custom() && !getRefreshToken().isNull_or_empty_custom()
