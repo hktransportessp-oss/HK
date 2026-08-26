@@ -29,19 +29,36 @@ async function bootstrap() {
     // 3. Ativação de Graceful Shutdown Hooks (SIGTERM, SIGINT)
     app.enableShutdownHooks();
 
-    // 4. Headers de segurança HTTP (Helmet) e desabilitação de cache para /admin
+    // 4. Headers de segurança HTTP (Helmet) com CSP compatível para scripts do painel e Swagger
     app.use(
       helmet({
         crossOriginResourcePolicy: { policy: 'cross-origin' },
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            scriptSrcAttr: ["'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+            connectSrc: ["'self'", 'https:', 'wss:', 'ws:'],
+            fontSrc: ["'self'", 'data:', 'https:'],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: [],
+          },
+        },
       }),
     );
 
-    // Desabilitar completamente o cache das rotas /admin para impedir execução de JavaScript obsoleto
+    // Desabilitar completamente o cache e garantir CSP permissivo para scripts inline nas rotas /admin
     app.use('/admin', (req, res, next) => {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
       res.setHeader('Surrogate-Control', 'no-store');
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws:; font-src 'self' data: https:;",
+      );
       next();
     });
 

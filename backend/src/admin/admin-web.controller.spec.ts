@@ -28,10 +28,13 @@ describe('AdminWebController', () => {
     expect(headers['Pragma']).toBe('no-cache');
     expect(headers['Expires']).toBe('0');
     expect(headers['Surrogate-Control']).toBe('no-store');
+    expect(headers['Content-Security-Policy']).toBeDefined();
+    expect(headers['Content-Security-Policy']).toContain("script-src 'self' 'unsafe-inline'");
     expect(sentHtml).toContain('id="login-form"');
     expect(sentHtml).toContain('id="login-username"');
     expect(sentHtml).toContain('id="login-password"');
     expect(sentHtml).toContain('id="login-submit-btn"');
+    expect(sentHtml).toContain('id="admin-diagnostics"');
     expect(sentHtml).toContain('/api/v1/auth/login');
   });
 
@@ -141,6 +144,14 @@ describe('AdminWebController', () => {
     createElement('form-reset-pwd');
     createElement('form-vehicle');
     createElement('user-form-cpf');
+    createElement('diag-js');
+    createElement('diag-dom');
+    createElement('diag-form');
+    createElement('diag-listener');
+    createElement('diag-submit');
+    createElement('diag-fetch');
+    createElement('diag-http');
+    createElement('diag-error');
 
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -228,5 +239,13 @@ describe('AdminWebController', () => {
         status: 'ACTIVE',
       }),
     );
+
+    // Assert diagnostic states
+    expect(elements['diag-js'].innerText).toBe('SIM');
+    expect(elements['diag-dom'].innerText).toBe('SIM');
+    expect(elements['diag-form'].innerText).toBe('SIM');
+    expect(elements['diag-listener'].innerText).toBe('SIM');
+    expect(elements['diag-fetch'].innerText).toBe('SIM');
+    expect(elements['diag-http'].innerText).toBe('200');
   });
 });

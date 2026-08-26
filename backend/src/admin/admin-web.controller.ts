@@ -489,12 +489,12 @@ export class AdminWebController {
         </div>
       </div>
 
-      <form id="login-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <form id="login-form" onsubmit="handleLogin(event); return false;" style="display: flex; flex-direction: column; gap: 1.25rem;">
         <div>
           <label for="login-username">CPF ou Telefone</label>
           <div class="input-with-icon">
             <span class="input-icon" data-lucide="user"></span>
-            <input type="text" id="login-username" class="input-control" required placeholder="000.000.000-00">
+            <input type="text" id="login-username" name="phone_or_cpf" class="input-control" required placeholder="000.000.000-00" autocomplete="username">
           </div>
         </div>
 
@@ -502,14 +502,14 @@ export class AdminWebController {
           <label for="login-password">Senha</label>
           <div class="input-with-icon">
             <span class="input-icon" data-lucide="lock"></span>
-            <input type="password" id="login-password" class="input-control" required placeholder="••••••••">
+            <input type="password" id="login-password" name="password" class="input-control" required placeholder="••••••••" autocomplete="current-password">
             <button type="button" id="toggle-pwd-btn" class="input-toggle-btn" title="Mostrar/Ocultar Senha">
               <span data-lucide="eye" class="icon-sm"></span>
             </button>
           </div>
         </div>
 
-        <button type="submit" id="login-submit-btn" class="btn btn-primary" style="padding: 0.85rem; margin-top: 0.5rem;">
+        <button type="submit" id="login-submit-btn" onclick="handleLogin(event);" class="btn btn-primary" style="padding: 0.85rem; margin-top: 0.5rem;">
           <span>Entrar no Painel</span>
           <span data-lucide="arrow-right" class="icon-sm"></span>
         </button>
@@ -1334,6 +1334,18 @@ export class AdminWebController {
       }
     }
 
+    window.handleLogin = handleLogin;
+    window.openModal = openModal;
+    window.closeModal = closeModal;
+    window.navigate = navigate;
+    window.handleLogout = handleLogout;
+    window.openCreateUserModal = openCreateUserModal;
+    window.openCreateUserForErpDriver = openCreateUserForErpDriver;
+    window.openEditUserModal = openEditUserModal;
+    window.openResetPasswordModal = openResetPasswordModal;
+    window.openCreateVehicleModal = openCreateVehicleModal;
+    window.openEditVehicleModal = openEditVehicleModal;
+
     function showApp() {
       const authScreen = document.getElementById('auth-screen');
       const appLayout = document.getElementById('app-layout');
@@ -2014,6 +2026,10 @@ export class AdminWebController {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws:; font-src 'self' data: https:;",
+    );
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   }
