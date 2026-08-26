@@ -122,8 +122,13 @@ fun HKConnectApp() {
         ) {
             composable("login") {
                 LoginScreen(
-                    onLoginSuccess = { phone, password, remember ->
-                        viewModel.login(phone, password, remember) { success ->
+                    currentServerUrl = viewModel.getServerUrl(),
+                    onUpdateServerUrl = { newUrl ->
+                        viewModel.updateServerUrl(newUrl)
+                    },
+                    onLogin = { phone, password, remember, onResult ->
+                        viewModel.login(phone, password, remember) { success, errorMsg ->
+                            onResult(success, errorMsg)
                             if (success) {
                                 navController.navigate("home") {
                                     popUpTo("login") { inclusive = true }

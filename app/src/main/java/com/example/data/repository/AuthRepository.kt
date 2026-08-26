@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.example.data.local.LogisticsDao
 import com.example.data.model.UserProfileEntity
 import com.example.data.remote.ApiClient
@@ -9,6 +10,9 @@ import com.example.data.remote.model.LoginRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 class AuthRepository(
     context: Context,
@@ -23,16 +27,23 @@ class AuthRepository(
         phoneOrCpf: String,
         passwordStr: String
     ): Result<UserProfileEntity> = withContext(Dispatchers.IO) {
+        Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] Repository.login iniciado")
         try {
+            Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] POST /api/v1/auth/login iniciado")
+            val cleanCpfOrPhone = phoneOrCpf.trim()
             val response = apiClient.authApiService.login(
                 LoginRequest(
-                    phoneOrCpf = phoneOrCpf,
+                    phoneOrCpf = cleanCpfOrPhone,
                     password = passwordStr
                 )
             )
 
+            val statusCode = response.code()
+            Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] HTTP status = $statusCode")
+
             if (response.isSuccessful && response.body() != null) {
                 val authData = response.body()!!
+                Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] sucesso no login remoto (userId=${authData.user.id})")
 
                 // Save JWT Tokens
                 tokenManager.saveTokens(
@@ -41,7 +52,6 @@ class AuthRepository(
                 )
 
                 val user = authData.user
-                val driver = authData.driver
                 val vehicle = authData.vehicle
 
                 val truckModel = vehicle?.let { "${it.brand} ${it.model}".trim() } ?: ""
@@ -80,22 +90,41 @@ class AuthRepository(
                 logisticsDao.insertUserProfile(userProfileEntity)
                 Result.success(userProfileEntity)
             } else {
-                val errorMsg = if (response.code() == 401) "Credenciais inválidas. Verifique seu CPF e senha." else "Falha na autenticação: ${response.code()}"
+                val errorMsg = when (statusCode) {
+                    400 -> "Dados de acesso inválidos. Verifique CPF e senha."
+                    401 -> "CPF ou senha incorretos."
+                    403 -> "Acesso não autorizado ou conta inativa."
+                    404 -> "Motorista não encontrado no sistema."
+                    500, 502, 503 -> "Servidor indisponível no momento ($statusCode). Tente novamente."
+                    else -> "Falha na autenticação (Código HTTP $statusCode)."
+                }
+                Log.e("HK_CONNECT_AUTH", "[ANDROID LOGIN] erro: $errorMsg")
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            // Fallback for offline login ONLY if an existing matching user session exists locally
+            Log.e("HK_CONNECT_AUTH", "[ANDROID LOGIN] erro exceção: ${e.javaClass.simpleName} - ${e.message}")
+            
+            // Check if there is an offline cached session for THIS specific user
             if (tokenManager.hasActiveSession()) {
                 val cachedCpf = tokenManager.getUserCpf()
-                val profile = logisticsDao.getUserProfileByCpf(cachedCpf)
-                if (profile != null) {
-                    Result.success(profile.copy(isLoggedIn = true))
-                } else {
-                    Result.failure(e)
+                val cleanInput = phoneOrCpf.replace(".", "").replace("-", "").trim()
+                val cleanCached = cachedCpf.replace(".", "").replace("-", "").trim()
+                if (cleanInput == cleanCached) {
+                    val profile = logisticsDao.getUserProfileByCpf(cachedCpf)
+                    if (profile != null) {
+                        Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] sessão offline reutilizada com sucesso")
+                        return@withContext Result.success(profile.copy(isLoggedIn = true))
+                    }
                 }
-            } else {
-                Result.failure(e)
             }
+
+            val humanError = when (e) {
+                is UnknownHostException -> "Não foi possível conectar ao servidor (${apiClient.tokenManager.getServerUrl()}). Verifique sua conexão à internet ou URL do backend."
+                is ConnectException -> "Conexão recusada pelo servidor. Verifique se a API está online."
+                is SocketTimeoutException -> "Tempo limite de conexão esgotado. Verifique sua rede."
+                else -> e.message ?: "Erro de conexão ao tentar autenticar."
+            }
+            Result.failure(Exception(humanError))
         }
     }
 
@@ -133,4 +162,10 @@ class AuthRepository(
     }
 
     fun hasActiveSession(): Boolean = tokenManager.hasActiveSession()
+
+    fun getServerUrl(): String = tokenManager.getServerUrl()
+
+    fun updateServerUrl(url: String) {
+        apiClient.updateBaseUrl(url)
+    }
 }

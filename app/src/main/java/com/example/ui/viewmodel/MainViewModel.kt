@@ -184,20 +184,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Actions
-    fun login(cpf: String, password: String, remember: Boolean, onResult: (Boolean) -> Unit) {
+    fun login(
+        cpf: String,
+        password: String,
+        remember: Boolean,
+        onResult: (isSuccess: Boolean, errorMessage: String?) -> Unit
+    ) {
+        android.util.Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] ViewModel.login iniciado")
         viewModelScope.launch {
             if (cpf.isNotBlank()) {
                 val result = authRepository.loginRemote(phoneOrCpf = cpf, passwordStr = password)
                 if (result.isSuccess) {
+                    android.util.Log.d("HK_CONNECT_AUTH", "[ANDROID LOGIN] sucesso no ViewModel, redirecionando para Home")
                     repository.refreshTripsFromRemote()
                     _currentScreen.value = Screen.Home
                     _activeTab.value = "home"
-                    onResult(true)
+                    onResult(true, null)
                 } else {
-                    onResult(false)
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Falha ao autenticar"
+                    android.util.Log.e("HK_CONNECT_AUTH", "[ANDROID LOGIN] falha no ViewModel: $errorMsg")
+                    onResult(false, errorMsg)
                 }
             } else {
-                onResult(false)
+                android.util.Log.e("HK_CONNECT_AUTH", "[ANDROID LOGIN] falha no ViewModel: CPF em branco")
+                onResult(false, "Informe seu CPF para continuar")
             }
         }
     }
@@ -207,6 +217,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             authRepository.logoutRemote()
             _currentScreen.value = Screen.Login
         }
+    }
+
+    fun getServerUrl(): String = authRepository.getServerUrl()
+
+    fun updateServerUrl(url: String) {
+        authRepository.updateServerUrl(url)
     }
 
     fun submitRomaneio(

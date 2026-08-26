@@ -34,30 +34,44 @@ class ApiClient private constructor(context: Context) {
         .addInterceptor(authInterceptor)
         .authenticator(tokenAuthenticator)
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    private val retrofit = Retrofit.Builder()
-        .baseUrl("https://api.hkconnect.com.br/") // Production REST base URL
-        .client(okHttpClient)
-        .addConverterFactory(MoshiConverterFactory.create(moshi))
-        .build()
-
-    val authApiService: AuthApiService by lazy {
-        val service = retrofit.create(AuthApiService::class.java)
-        authApiServiceRef = service
-        service
+    private fun buildRetrofit(): Retrofit {
+        val baseUrl = tokenManager.getServerUrl()
+        val formattedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        return Retrofit.Builder()
+            .baseUrl(formattedUrl)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
     }
 
-    val tripsApiService: TripsApiService by lazy {
-        retrofit.create(TripsApiService::class.java)
-    }
+    private var retrofitInstance = buildRetrofit()
+
+    val authApiService: AuthApiService
+        get() {
+            if (authApiServiceRef == null) {
+                authApiServiceRef = retrofitInstance.create(AuthApiService::class.java)
+            }
+            return authApiServiceRef!!
+        }
+
+    val tripsApiService: TripsApiService
+        get() = retrofitInstance.create(TripsApiService::class.java)
 
     private fun createAuthApiService(): AuthApiService {
-        val service = retrofit.create(AuthApiService::class.java)
+        val service = retrofitInstance.create(AuthApiService::class.java)
         authApiServiceRef = service
         return service
+    }
+
+    fun updateBaseUrl(newUrl: String) {
+        tokenManager.setServerUrl(newUrl)
+        retrofitInstance = buildRetrofit()
+        authApiServiceRef = null
     }
 
     companion object {

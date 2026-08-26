@@ -65,6 +65,16 @@ class FakeLogisticsDao : LogisticsDao {
     override suspend fun getUserProfileByCpf(cpf: String): UserProfileEntity? = null
     override suspend fun insertUserProfile(userProfile: UserProfileEntity) {}
     override suspend fun setLoggedInState(cpf: String, isLoggedIn: Boolean) {}
+    override suspend fun clearTrips() { trips.clear() }
+    override suspend fun clearDeliveries() {}
+    override suspend fun clearInvoices() {}
+    override suspend fun clearOccurrences() {}
+    override suspend fun clearRomaneios() {}
+    override suspend fun clearTolls() {}
+    override suspend fun clearFechamentos() {}
+    override suspend fun clearNotifications() {}
+    override suspend fun clearUserProfile() {}
+    override suspend fun purgeDemoProfiles() {}
 }
 
 class TripIsolationUnitTest {

@@ -17,6 +17,8 @@ class TokenManager(context: Context) {
         private const val KEY_USER_PHONE = "user_phone"
         private const val KEY_TRUCK_MODEL = "truck_model"
         private const val KEY_TRUCK_PLATE = "truck_plate"
+        private const val KEY_SERVER_URL = "server_base_url"
+        private const val DEFAULT_SERVER_URL = "https://api.hkconnect.com.br/"
 
         @Volatile
         private var instance: TokenManager? = null
@@ -68,6 +70,13 @@ class TokenManager(context: Context) {
     fun getTruckModel(): String = prefs.getString(KEY_TRUCK_MODEL, "") ?: ""
 
     fun getTruckPlate(): String = prefs.getString(KEY_TRUCK_PLATE, "") ?: ""
+
+    fun getServerUrl(): String = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+
+    fun setServerUrl(url: String) {
+        val cleanUrl = if (url.endsWith("/")) url else "$url/"
+        prefs.edit().putString(KEY_SERVER_URL, cleanUrl).apply()
+    }
 
     fun hasActiveSession(): Boolean {
         return !getAccessToken().isNull_or_empty_custom() && !getRefreshToken().isNull_or_empty_custom()
