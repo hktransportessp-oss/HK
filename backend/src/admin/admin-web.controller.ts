@@ -1260,7 +1260,7 @@ export class AdminWebController {
       }
 
       const username = (document.getElementById('login-username')?.value || '').trim();
-      const password = document.getElementById('login-password')?.value || '';
+      const password = (document.getElementById('login-password')?.value || '').trim();
 
       if (!username || !password) {
         showToast('Informe o CPF/Telefone e a senha.', 'error');

@@ -24,14 +24,17 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const cleanInput = dto.phone_or_cpf.replace(/\D/g, '');
+    const rawInput = (dto.phone_or_cpf || '').trim();
+    const cleanInput = rawInput.replace(/\D/g, '');
+    const rawPassword = dto.password || '';
+    const trimmedPassword = rawPassword.trim();
 
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { cpf: cleanInput },
-          { cpf: dto.phone_or_cpf },
-          { phone: dto.phone_or_cpf },
+          ...(cleanInput ? [{ cpf: cleanInput }, { phone: cleanInput }] : []),
+          { cpf: rawInput },
+          { phone: rawInput },
         ],
       },
       include: {
@@ -59,7 +62,11 @@ export class AuthService {
       throw new ForbiddenException('Usuário inativo');
     }
 
-    const isPasswordValid = await argon2.verify(user.passwordHash, dto.password);
+    let isPasswordValid = await argon2.verify(user.passwordHash, rawPassword);
+    if (!isPasswordValid && rawPassword !== trimmedPassword) {
+      isPasswordValid = await argon2.verify(user.passwordHash, trimmedPassword);
+    }
+
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
