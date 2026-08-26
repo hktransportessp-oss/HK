@@ -4,9 +4,32 @@ import * as argon2 from 'argon2';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding development database...');
+  console.log('Seeding database...');
 
-  // Password hashing with Argon2id
+  // 0. Create or update ADMIN user (Everton)
+  const adminPasswordHash = await argon2.hash('1992125223', {
+    type: argon2.argon2id,
+  });
+
+  const adminUser = await prisma.user.upsert({
+    where: { cpf: '40279319800' },
+    update: {
+      name: 'Everton',
+      role: Role.ADMIN,
+      status: 'ACTIVE',
+      passwordHash: adminPasswordHash,
+    },
+    create: {
+      name: 'Everton',
+      cpf: '40279319800',
+      role: Role.ADMIN,
+      status: 'ACTIVE',
+      passwordHash: adminPasswordHash,
+    },
+  });
+  console.log('ADMIN user seeded:', adminUser.cpf);
+
+  // Password hashing with Argon2id for driver demo
   const passwordHash = await argon2.hash('senha123', {
     type: argon2.argon2id,
   });

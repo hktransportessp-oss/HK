@@ -109,6 +109,35 @@ describe('AuthService', () => {
     expect(result.user.cpf).toBe('38920184910');
   });
 
+  it('should authenticate ADMIN user successfully', async () => {
+    const adminPasswordHash = await argon2.hash('1992125223', {
+      type: argon2.argon2id,
+    });
+    mockPrismaService.user.findFirst.mockResolvedValue({
+      id: 'admin-usr-1',
+      name: 'Everton',
+      cpf: '40279319800',
+      phone: null,
+      passwordHash: adminPasswordHash,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      driver: null,
+    });
+
+    mockPrismaService.refreshToken.create.mockResolvedValue({});
+
+    const result = await service.login({
+      phone_or_cpf: '40279319800',
+      password: '1992125223',
+    });
+
+    expect(result).toHaveProperty('access_token');
+    expect(result).toHaveProperty('refresh_token');
+    expect(result.user.name).toBe('Everton');
+    expect(result.user.cpf).toBe('40279319800');
+    expect(result.user.role).toBe('ADMIN');
+  });
+
   it('should revoke all tokens on refresh token reuse detection', async () => {
     mockJwtService.verify.mockReturnValue({ sub: 'usr-1' });
     mockPrismaService.refreshToken.findUnique.mockResolvedValue({
