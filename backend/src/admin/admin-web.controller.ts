@@ -514,6 +514,24 @@ export class AdminWebController {
           <span data-lucide="arrow-right" class="icon-sm"></span>
         </button>
       </form>
+
+      <!-- PAINEL DE DIAGNÓSTICO VISUAL TEMPORÁRIO (HOMOLOGAÇÃO) -->
+      <div id="admin-diagnostics" style="margin-top: 1.5rem; padding: 0.85rem; border-radius: 0.6rem; background: rgba(2, 6, 23, 0.95); border: 1px solid var(--border-color); font-size: 0.72rem; color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.35rem;">
+          <span>DIAGNÓSTICO DO PAINEL</span>
+          <span style="font-size: 0.62rem; padding: 2px 6px; border-radius: 4px; background: rgba(37,99,235,0.25); color: var(--brand-light); font-weight: 600;">HOMOLOGAÇÃO</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; line-height: 1.3;">
+          <div>JS Carregado: <strong id="diag-js" style="color: var(--rose-base);">NÃO</strong></div>
+          <div>DOM Pronto: <strong id="diag-dom" style="color: var(--rose-base);">NÃO</strong></div>
+          <div>Formulário: <strong id="diag-form" style="color: var(--rose-base);">NÃO</strong></div>
+          <div>Listener: <strong id="diag-listener" style="color: var(--rose-base);">NÃO</strong></div>
+          <div>Último Submit: <strong id="diag-submit" style="color: var(--text-primary);">nenhum</strong></div>
+          <div>Fetch Iniciado: <strong id="diag-fetch" style="color: var(--text-primary);">NÃO</strong></div>
+          <div style="grid-column: span 2;">Status HTTP: <strong id="diag-http" style="color: var(--text-primary);">nenhum</strong></div>
+          <div style="grid-column: span 2; word-break: break-all;">Último Erro JS: <strong id="diag-error" style="color: var(--emerald-base);">nenhum</strong></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1038,13 +1056,42 @@ export class AdminWebController {
       'alert-triangle': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>'
     };
 
-    function renderIcons(container = document) {
-      container.querySelectorAll('[data-lucide]').forEach(el => {
-        const iconName = el.getAttribute('data-lucide');
-        if (SVG_ICONS[iconName]) {
-          el.innerHTML = SVG_ICONS[iconName];
+    // DIAGNOSTIC CARD HELPER
+    function updateDiag(id, text, color) {
+      try {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerText = text;
+          if (color) el.style.color = color;
         }
-      });
+      } catch (e) {}
+    }
+
+    // GLOBAL ERROR CATCHERS (SANITIZE LOGS)
+    window.addEventListener('error', (event) => {
+      const msg = (event && event.message ? event.message : 'Erro JS desconhecido').substring(0, 90);
+      console.error('[ADMIN] Erro JS capturado:', msg);
+      updateDiag('diag-error', msg, 'var(--rose-base)');
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event && event.reason ? (event.reason.message || event.reason) : 'Promise rejeitada';
+      const msg = String(reason).substring(0, 90);
+      console.error('[ADMIN] Rejeição não tratada:', msg);
+      updateDiag('diag-error', msg, 'var(--rose-base)');
+    });
+
+    function renderIcons(container = document) {
+      try {
+        container.querySelectorAll('[data-lucide]').forEach(el => {
+          const iconName = el.getAttribute('data-lucide');
+          if (SVG_ICONS[iconName]) {
+            el.innerHTML = SVG_ICONS[iconName];
+          }
+        });
+      } catch (e) {
+        console.warn('[ADMIN] Falha ao renderizar ícones:', e);
+      }
     }
 
     // SAFE LOCALSTORAGE HELPERS
@@ -1090,31 +1137,36 @@ export class AdminWebController {
 
     // TOAST NOTIFICATIONS
     function showToast(msg, type = 'info') {
-      const container = document.getElementById('toast-container');
-      const toast = document.createElement('div');
-      
-      const typeClasses = {
-        success: 'toast-success',
-        error: 'toast-error',
-        info: 'toast-info',
-      };
+      try {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const toast = document.createElement('div');
+        
+        const typeClasses = {
+          success: 'toast-success',
+          error: 'toast-error',
+          info: 'toast-info',
+        };
 
-      const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-triangle' : 'info';
+        const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-triangle' : 'info';
 
-      toast.className = \`toast \${typeClasses[type] || 'toast-info'}\`;
-      toast.innerHTML = \`
-        <span data-lucide="\${iconName}" class="icon-md" style="flex-shrink: 0; margin-top: 2px;"></span>
-        <div style="flex: 1; line-height: 1.4;">\${msg}</div>
-      \`;
+        toast.className = \`toast \${typeClasses[type] || 'toast-info'}\`;
+        toast.innerHTML = \`
+          <span data-lucide="\${iconName}" class="icon-md" style="flex-shrink: 0; margin-top: 2px;"></span>
+          <div style="flex: 1; line-height: 1.4;">\${msg}</div>
+        \`;
 
-      container.appendChild(toast);
-      renderIcons(toast);
+        container.appendChild(toast);
+        renderIcons(toast);
 
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-10px)';
-        setTimeout(() => toast.remove(), 250);
-      }, 4000);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(-10px)';
+          setTimeout(() => toast.remove(), 250);
+        }, 4000);
+      } catch (e) {
+        console.error('[ADMIN] Erro ao exibir toast:', e);
+      }
     }
 
     // API REQUESTS
@@ -1157,9 +1209,13 @@ export class AdminWebController {
       const activeNav = document.getElementById(\`nav-\${viewName}\`);
       if (activeNav) activeNav.classList.add('active');
 
-      document.getElementById('view-dashboard').classList.add('hidden');
-      document.getElementById('view-users').classList.add('hidden');
-      document.getElementById('view-vehicles').classList.add('hidden');
+      const vDashboard = document.getElementById('view-dashboard');
+      const vUsers = document.getElementById('view-users');
+      const vVehicles = document.getElementById('view-vehicles');
+
+      if (vDashboard) vDashboard.classList.add('hidden');
+      if (vUsers) vUsers.classList.add('hidden');
+      if (vVehicles) vVehicles.classList.add('hidden');
 
       const target = document.getElementById(\`view-\${viewName}\`);
       if (target) target.classList.remove('hidden');
@@ -1169,24 +1225,32 @@ export class AdminWebController {
         users: 'Gestão de Usuários e Motoristas',
         vehicles: 'Gestão da Frota de Veículos',
       };
-      document.getElementById('page-title').innerText = titles[viewName] || 'Painel';
+      const pTitle = document.getElementById('page-title');
+      if (pTitle) pTitle.innerText = titles[viewName] || 'Painel';
 
       refreshCurrentView();
     }
 
     async function refreshCurrentView() {
-      if (STATE.currentView === 'dashboard') {
-        await loadDashboard();
-      } else if (STATE.currentView === 'users') {
-        await loadUsers();
-      } else if (STATE.currentView === 'vehicles') {
-        await loadVehicles();
+      try {
+        if (STATE.currentView === 'dashboard') {
+          await loadDashboard();
+        } else if (STATE.currentView === 'users') {
+          await loadUsers();
+        } else if (STATE.currentView === 'vehicles') {
+          await loadVehicles();
+        }
+      } catch (e) {
+        console.error('[ADMIN] Erro ao recarregar view:', e);
       }
     }
 
     // AUTH & LOGIN
     async function handleLogin(e) {
       if (e) e.preventDefault();
+      
+      const now = new Date().toLocaleTimeString('pt-BR');
+      updateDiag('diag-submit', now, 'var(--text-primary)');
       console.log('[ADMIN] submit disparado');
 
       const submitBtn = document.getElementById('login-submit-btn');
@@ -1209,6 +1273,7 @@ export class AdminWebController {
       }
 
       console.log('[ADMIN] enviando POST /api/v1/auth/login');
+      updateDiag('diag-fetch', 'SIM', 'var(--emerald-base)');
 
       try {
         const res = await fetch('/api/v1/auth/login', {
@@ -1216,14 +1281,18 @@ export class AdminWebController {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             phone_or_cpf: username,
-            password
+            password: password,
           }),
         });
+
+        updateDiag('diag-http', String(res.status), res.ok ? 'var(--emerald-base)' : 'var(--rose-base)');
 
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          const errMsg = Array.isArray(data.message) ? data.message.join(', ') : (data.message || \`Erro na autenticação (\${res.status})\`);
+          const errMsg = Array.isArray(data.message)
+            ? data.message.join(', ')
+            : (data.message || \`Erro na autenticação (HTTP \${res.status})\`);
           showToast(errMsg, 'error');
           return;
         }
@@ -1242,8 +1311,8 @@ export class AdminWebController {
             localStorage.setItem('hk_access_token', data.access_token);
             localStorage.setItem('hk_refresh_token', data.refresh_token);
             localStorage.setItem('hk_user', JSON.stringify(data.user));
-          } catch (e) {
-            console.warn('[ADMIN] Falha ao persistir no localStorage:', e);
+          } catch (storageErr) {
+            console.warn('[ADMIN] Falha ao persistir no localStorage:', storageErr);
           }
 
           showApp();
@@ -1253,6 +1322,8 @@ export class AdminWebController {
         }
       } catch (err) {
         console.error('[ADMIN] Erro no login:', err);
+        updateDiag('diag-http', 'Erro de Rede', 'var(--rose-base)');
+        updateDiag('diag-error', (err.message || 'Falha de conexão').substring(0, 80), 'var(--rose-base)');
         showToast(err.message || 'Falha na comunicação com o servidor HK Central.', 'error');
       } finally {
         if (submitBtn) {
@@ -1264,14 +1335,23 @@ export class AdminWebController {
     }
 
     function showApp() {
-      document.getElementById('auth-screen').classList.add('hidden');
-      document.getElementById('app-layout').classList.remove('hidden');
+      const authScreen = document.getElementById('auth-screen');
+      const appLayout = document.getElementById('app-layout');
+
+      if (authScreen) authScreen.classList.add('hidden');
+      if (appLayout) appLayout.classList.remove('hidden');
 
       if (STATE.user) {
-        document.getElementById('user-display-name').innerText = STATE.user.name;
-        document.getElementById('user-display-role').innerText = STATE.user.role;
-        const initials = STATE.user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-        document.getElementById('user-avatar').innerText = initials || 'AD';
+        const uName = document.getElementById('user-display-name');
+        const uRole = document.getElementById('user-display-role');
+        const uAvatar = document.getElementById('user-avatar');
+
+        if (uName) uName.innerText = STATE.user.name;
+        if (uRole) uRole.innerText = STATE.user.role;
+        if (uAvatar) {
+          const initials = STATE.user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+          uAvatar.innerText = initials || 'AD';
+        }
       }
 
       navigate('dashboard');
@@ -1285,21 +1365,20 @@ export class AdminWebController {
         }).catch(() => {});
       }
 
-      localStorage.removeItem('hk_access_token');
-      localStorage.removeItem('hk_refresh_token');
-      localStorage.removeItem('hk_user');
+      try {
+        localStorage.removeItem('hk_access_token');
+        localStorage.removeItem('hk_refresh_token');
+        localStorage.removeItem('hk_user');
+      } catch (e) {}
+
       STATE.token = null;
       STATE.user = null;
 
-      document.getElementById('app-layout').classList.add('hidden');
-      document.getElementById('auth-screen').classList.remove('hidden');
+      const appLayout = document.getElementById('app-layout');
+      const authScreen = document.getElementById('auth-screen');
+      if (appLayout) appLayout.classList.add('hidden');
+      if (authScreen) authScreen.classList.remove('hidden');
     }
-
-    // Toggle Password Visibility
-    document.getElementById('toggle-pwd-btn')?.addEventListener('click', () => {
-      const input = document.getElementById('login-password');
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
 
     // DASHBOARD
     async function loadDashboard() {
@@ -1307,32 +1386,42 @@ export class AdminWebController {
         const stats = await apiFetch('/api/v1/admin/dashboard');
         STATE.stats = stats;
 
-        document.getElementById('stat-total-users').innerText = stats.totalUsers ?? 0;
-        document.getElementById('stat-active-users').innerText = stats.activeUsers ?? 0;
-        document.getElementById('stat-inactive-users').innerText = stats.inactiveUsers ?? 0;
-        document.getElementById('stat-total-drivers').innerText = stats.totalDrivers ?? 0;
-        document.getElementById('stat-erp-drivers').innerText = stats.erpOnlyDrivers ?? 0;
-        document.getElementById('stat-total-vehicles').innerText = stats.totalVehicles ?? 0;
+        const elTotalUsers = document.getElementById('stat-total-users');
+        const elActiveUsers = document.getElementById('stat-active-users');
+        const elInactiveUsers = document.getElementById('stat-inactive-users');
+        const elTotalDrivers = document.getElementById('stat-total-drivers');
+        const elErpDrivers = document.getElementById('stat-erp-drivers');
+        const elTotalVehicles = document.getElementById('stat-total-vehicles');
+
+        if (elTotalUsers) elTotalUsers.innerText = stats.totalUsers ?? 0;
+        if (elActiveUsers) elActiveUsers.innerText = stats.activeUsers ?? 0;
+        if (elInactiveUsers) elInactiveUsers.innerText = stats.inactiveUsers ?? 0;
+        if (elTotalDrivers) elTotalDrivers.innerText = stats.totalDrivers ?? 0;
+        if (elErpDrivers) elErpDrivers.innerText = stats.erpOnlyDrivers ?? 0;
+        if (elTotalVehicles) elTotalVehicles.innerText = stats.totalVehicles ?? 0;
 
         const unlinked = await apiFetch('/api/v1/admin/drivers/unlinked');
         STATE.unlinkedDrivers = unlinked;
         const unlinkedContainer = document.getElementById('unlinked-drivers-list');
-        document.getElementById('erp-badge').innerText = \`\${unlinked.length} pendentes\`;
+        const erpBadge = document.getElementById('erp-badge');
+        if (erpBadge) erpBadge.innerText = \`\${unlinked.length} pendentes\`;
 
-        if (!unlinked.length) {
-          unlinkedContainer.innerHTML = '<p class="text-xs" style="color: var(--text-muted); font-style: italic;">Nenhum motorista pendente de vínculo.</p>';
-        } else {
-          unlinkedContainer.innerHTML = unlinked.map(d => \`
-            <div style="padding: 0.65rem 0.85rem; border-radius: 0.75rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <span class="text-xs font-semibold block">CNH: \${d.cnh || 'Não inf.'} (Cat \${d.cnhCategory || '-'})</span>
-                <span class="text-xs" style="color: var(--purple-base); font-size: 11px;">RNTRC: \${d.rntrc || '-'}</span>
+        if (unlinkedContainer) {
+          if (!unlinked.length) {
+            unlinkedContainer.innerHTML = '<p class="text-xs" style="color: var(--text-muted); font-style: italic;">Nenhum motorista pendente de vínculo.</p>';
+          } else {
+            unlinkedContainer.innerHTML = unlinked.map(d => \`
+              <div style="padding: 0.65rem 0.85rem; border-radius: 0.75rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <span class="text-xs font-semibold block">CNH: \${d.cnh || 'Não inf.'} (Cat \${d.cnhCategory || '-'})</span>
+                  <span class="text-xs" style="color: var(--purple-base); font-size: 11px;">RNTRC: \${d.rntrc || '-'}</span>
+                </div>
+                <button onclick="openCreateUserForErpDriver('\${d.id}', '\${d.cnh || ''}', '\${d.cnhCategory || ''}', '\${d.rntrc || ''}')" class="btn btn-sm btn-secondary" style="color: var(--purple-base); border-color: var(--purple-border);">
+                  Vincular Login
+                </button>
               </div>
-              <button onclick="openCreateUserForErpDriver('\${d.id}', '\${d.cnh || ''}', '\${d.cnhCategory || ''}', '\${d.rntrc || ''}')" class="btn btn-sm btn-secondary" style="color: var(--purple-base); border-color: var(--purple-border);">
-                Vincular Login
-              </button>
-            </div>
-          \`).join('');
+            \`).join('');
+          }
         }
       } catch (err) {
         console.error('Error loading dashboard:', err);
@@ -1355,14 +1444,19 @@ export class AdminWebController {
         STATE.users = users;
         renderUsersTable(users);
       } catch (err) {
-        document.getElementById('users-table-body').innerHTML = \`
-          <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar usuários: \${err.message}</td></tr>
-        \`;
+        const tbody = document.getElementById('users-table-body');
+        if (tbody) {
+          tbody.innerHTML = \`
+            <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar usuários: \${err.message}</td></tr>
+          \`;
+        }
       }
     }
 
     function renderUsersTable(users) {
       const tbody = document.getElementById('users-table-body');
+      if (!tbody) return;
+
       if (!users.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum usuário encontrado.</td></tr>';
         return;
@@ -1442,14 +1536,19 @@ export class AdminWebController {
         STATE.vehicles = vehicles;
         renderVehiclesTable(vehicles);
       } catch (err) {
-        document.getElementById('vehicles-table-body').innerHTML = \`
-          <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar veículos: \${err.message}</td></tr>
-        \`;
+        const tbody = document.getElementById('vehicles-table-body');
+        if (tbody) {
+          tbody.innerHTML = \`
+            <tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--rose-base);">Erro ao carregar veículos: \${err.message}</td></tr>
+          \`;
+        }
       }
     }
 
     function renderVehiclesTable(vehicles) {
       const tbody = document.getElementById('vehicles-table-body');
+      if (!tbody) return;
+
       if (!vehicles.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum veículo cadastrado.</td></tr>';
         return;
@@ -1479,33 +1578,41 @@ export class AdminWebController {
 
     // MODAL HELPERS
     function openModal(id) {
-      document.getElementById(id).classList.remove('hidden');
-      renderIcons(document.getElementById(id));
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove('hidden');
+        renderIcons(modal);
+      }
     }
 
     function closeModal(id) {
-      document.getElementById(id).classList.add('hidden');
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.add('hidden');
     }
 
     async function populateVehiclesDropdown(selectedVehicleId = '') {
       try {
         const vehicles = await apiFetch('/api/v1/admin/vehicles');
         const select = document.getElementById('user-form-vehicle');
-        select.innerHTML = '<option value="">Nenhum veículo vinculado (alocar depois)</option>' +
-          vehicles.map(v => \`
-            <option value="\${v.id}" \${v.id === selectedVehicleId ? 'selected' : ''}>
-              \${v.plate} — \${v.brand} \${v.model} (\${v.status})
-            </option>
-          \`).join('');
+        if (select) {
+          select.innerHTML = '<option value="">Nenhum veículo vinculado (alocar depois)</option>' +
+            vehicles.map(v => \`
+              <option value="\${v.id}" \${v.id === selectedVehicleId ? 'selected' : ''}>
+                \${v.plate} — \${v.brand} \${v.model} (\${v.status})
+              </option>
+            \`).join('');
+        }
       } catch (err) {
         console.error('Failed to load vehicles dropdown:', err);
       }
     }
 
     function handleRoleChange() {
-      const role = document.getElementById('user-form-role').value;
+      const roleEl = document.getElementById('user-form-role');
       const driverSection = document.getElementById('driver-fields-section');
-      if (role === 'DRIVER') {
+      if (!roleEl || !driverSection) return;
+
+      if (roleEl.value === 'DRIVER') {
         driverSection.classList.remove('hidden');
       } else {
         driverSection.classList.add('hidden');
@@ -1513,14 +1620,23 @@ export class AdminWebController {
     }
 
     async function openCreateUserModal(defaultRole = 'DRIVER') {
-      document.getElementById('modal-user-title').innerText = 'Novo Usuário';
-      document.getElementById('form-user').reset();
-      document.getElementById('user-form-id').value = '';
-      document.getElementById('user-form-cpf').disabled = false;
-      document.getElementById('user-form-pwd-container').classList.remove('hidden');
-      document.getElementById('user-form-password').required = true;
-      document.getElementById('user-form-role').value = defaultRole;
-      document.getElementById('erp-detection-alert').classList.add('hidden');
+      const title = document.getElementById('modal-user-title');
+      const form = document.getElementById('form-user');
+      const idInput = document.getElementById('user-form-id');
+      const cpfInput = document.getElementById('user-form-cpf');
+      const pwdContainer = document.getElementById('user-form-pwd-container');
+      const pwdInput = document.getElementById('user-form-password');
+      const roleInput = document.getElementById('user-form-role');
+      const erpAlert = document.getElementById('erp-detection-alert');
+
+      if (title) title.innerText = 'Novo Usuário';
+      if (form) form.reset();
+      if (idInput) idInput.value = '';
+      if (cpfInput) cpfInput.disabled = false;
+      if (pwdContainer) pwdContainer.classList.remove('hidden');
+      if (pwdInput) pwdInput.required = true;
+      if (roleInput) roleInput.value = defaultRole;
+      if (erpAlert) erpAlert.classList.add('hidden');
 
       handleRoleChange();
       await populateVehiclesDropdown();
@@ -1529,34 +1645,54 @@ export class AdminWebController {
 
     async function openCreateUserForErpDriver(driverId, cnh, cnhCat, rntrc) {
       await openCreateUserModal('DRIVER');
-      document.getElementById('user-form-cnh').value = cnh;
-      document.getElementById('user-form-cnh-cat').value = cnhCat;
-      document.getElementById('user-form-rntrc').value = rntrc;
-      document.getElementById('erp-detection-alert').classList.remove('hidden');
+      const cnhEl = document.getElementById('user-form-cnh');
+      const catEl = document.getElementById('user-form-cnh-cat');
+      const rntrcEl = document.getElementById('user-form-rntrc');
+      const alertEl = document.getElementById('erp-detection-alert');
+
+      if (cnhEl) cnhEl.value = cnh;
+      if (catEl) catEl.value = cnhCat;
+      if (rntrcEl) rntrcEl.value = rntrc;
+      if (alertEl) alertEl.classList.remove('hidden');
     }
 
     async function openEditUserModal(userId) {
       try {
         const user = await apiFetch(\`/api/v1/admin/users/\${userId}\`);
-        document.getElementById('modal-user-title').innerText = 'Editar Usuário';
-        document.getElementById('user-form-id').value = user.id;
-        document.getElementById('user-form-name').value = user.name;
-        document.getElementById('user-form-cpf').value = user.cpf;
-        document.getElementById('user-form-cpf').disabled = true;
-        document.getElementById('user-form-phone').value = user.phone || '';
-        document.getElementById('user-form-role').value = user.role;
-        document.getElementById('user-form-status').value = user.status;
+        const title = document.getElementById('modal-user-title');
+        const idInput = document.getElementById('user-form-id');
+        const nameInput = document.getElementById('user-form-name');
+        const cpfInput = document.getElementById('user-form-cpf');
+        const phoneInput = document.getElementById('user-form-phone');
+        const roleInput = document.getElementById('user-form-role');
+        const statusInput = document.getElementById('user-form-status');
+        const pwdContainer = document.getElementById('user-form-pwd-container');
+        const pwdInput = document.getElementById('user-form-password');
 
-        document.getElementById('user-form-pwd-container').classList.add('hidden');
-        document.getElementById('user-form-password').required = false;
+        if (title) title.innerText = 'Editar Usuário';
+        if (idInput) idInput.value = user.id;
+        if (nameInput) nameInput.value = user.name;
+        if (cpfInput) {
+          cpfInput.value = user.cpf;
+          cpfInput.disabled = true;
+        }
+        if (phoneInput) phoneInput.value = user.phone || '';
+        if (roleInput) roleInput.value = user.role;
+        if (statusInput) statusInput.value = user.status;
+
+        if (pwdContainer) pwdContainer.classList.add('hidden');
+        if (pwdInput) pwdInput.required = false;
 
         const currentVehicleId = user.driver?.assignments?.[0]?.vehicle?.id || '';
         await populateVehiclesDropdown(currentVehicleId);
 
         if (user.driver) {
-          document.getElementById('user-form-cnh').value = user.driver.cnh || '';
-          document.getElementById('user-form-cnh-cat').value = user.driver.cnhCategory || '';
-          document.getElementById('user-form-rntrc').value = user.driver.rntrc || '';
+          const cnhEl = document.getElementById('user-form-cnh');
+          const catEl = document.getElementById('user-form-cnh-cat');
+          const rntrcEl = document.getElementById('user-form-rntrc');
+          if (cnhEl) cnhEl.value = user.driver.cnh || '';
+          if (catEl) catEl.value = user.driver.cnhCategory || '';
+          if (rntrcEl) rntrcEl.value = user.driver.rntrc || '';
         }
 
         handleRoleChange();
@@ -1569,26 +1705,26 @@ export class AdminWebController {
     // FORM USER SUBMIT
     async function handleUserSubmit(e) {
       e.preventDefault();
-      const id = document.getElementById('user-form-id').value;
+      const id = document.getElementById('user-form-id')?.value;
       const isEdit = Boolean(id);
 
       const payload = {
-        name: document.getElementById('user-form-name').value.trim(),
-        phone: document.getElementById('user-form-phone').value.trim() || undefined,
-        role: document.getElementById('user-form-role').value,
-        status: document.getElementById('user-form-status').value,
+        name: document.getElementById('user-form-name')?.value.trim(),
+        phone: document.getElementById('user-form-phone')?.value.trim() || undefined,
+        role: document.getElementById('user-form-role')?.value,
+        status: document.getElementById('user-form-status')?.value,
       };
 
       if (!isEdit) {
-        payload.cpf = document.getElementById('user-form-cpf').value.trim();
-        payload.password = document.getElementById('user-form-password').value;
+        payload.cpf = document.getElementById('user-form-cpf')?.value.trim();
+        payload.password = document.getElementById('user-form-password')?.value;
       }
 
       if (payload.role === 'DRIVER') {
-        payload.cnh = document.getElementById('user-form-cnh').value.trim() || undefined;
-        payload.cnhCategory = document.getElementById('user-form-cnh-cat').value || undefined;
-        payload.rntrc = document.getElementById('user-form-rntrc').value.trim() || undefined;
-        payload.vehicleId = document.getElementById('user-form-vehicle').value || undefined;
+        payload.cnh = document.getElementById('user-form-cnh')?.value.trim() || undefined;
+        payload.cnhCategory = document.getElementById('user-form-cnh-cat')?.value || undefined;
+        payload.rntrc = document.getElementById('user-form-rntrc')?.value.trim() || undefined;
+        payload.vehicleId = document.getElementById('user-form-vehicle')?.value || undefined;
       }
 
       try {
@@ -1633,17 +1769,21 @@ export class AdminWebController {
 
     // RESET PASSWORD
     function openResetPasswordModal(id, name) {
-      document.getElementById('reset-pwd-user-id').value = id;
-      document.getElementById('reset-pwd-username').innerText = name;
-      document.getElementById('form-reset-pwd').reset();
+      const idEl = document.getElementById('reset-pwd-user-id');
+      const nameEl = document.getElementById('reset-pwd-username');
+      const formEl = document.getElementById('form-reset-pwd');
+
+      if (idEl) idEl.value = id;
+      if (nameEl) nameEl.innerText = name;
+      if (formEl) formEl.reset();
       openModal('modal-reset-pwd');
     }
 
     async function handleResetPasswordSubmit(e) {
       e.preventDefault();
-      const id = document.getElementById('reset-pwd-user-id').value;
-      const pwd = document.getElementById('reset-new-password').value;
-      const confirmPwd = document.getElementById('reset-confirm-password').value;
+      const id = document.getElementById('reset-pwd-user-id')?.value;
+      const pwd = document.getElementById('reset-new-password')?.value;
+      const confirmPwd = document.getElementById('reset-confirm-password')?.value;
 
       if (pwd !== confirmPwd) {
         showToast('As senhas digitadas não coincidem.', 'error');
@@ -1681,22 +1821,34 @@ export class AdminWebController {
 
     // VEHICLES MODAL & ACTIONS
     function openCreateVehicleModal() {
-      document.getElementById('modal-vehicle-title').innerText = 'Novo Veículo';
-      document.getElementById('form-vehicle').reset();
-      document.getElementById('vehicle-form-id').value = '';
+      const title = document.getElementById('modal-vehicle-title');
+      const form = document.getElementById('form-vehicle');
+      const idInput = document.getElementById('vehicle-form-id');
+
+      if (title) title.innerText = 'Novo Veículo';
+      if (form) form.reset();
+      if (idInput) idInput.value = '';
       openModal('modal-vehicle');
     }
 
     async function openEditVehicleModal(vehicleId) {
       try {
         const v = await apiFetch(\`/api/v1/admin/vehicles/\${vehicleId}\`);
-        document.getElementById('modal-vehicle-title').innerText = 'Editar Veículo';
-        document.getElementById('vehicle-form-id').value = v.id;
-        document.getElementById('vehicle-form-plate').value = v.plate;
-        document.getElementById('vehicle-form-model').value = v.model;
-        document.getElementById('vehicle-form-brand').value = v.brand;
-        document.getElementById('vehicle-form-year').value = v.year || '';
-        document.getElementById('vehicle-form-status').value = v.status;
+        const title = document.getElementById('modal-vehicle-title');
+        const idInput = document.getElementById('vehicle-form-id');
+        const plateInput = document.getElementById('vehicle-form-plate');
+        const modelInput = document.getElementById('vehicle-form-model');
+        const brandInput = document.getElementById('vehicle-form-brand');
+        const yearInput = document.getElementById('vehicle-form-year');
+        const statusInput = document.getElementById('vehicle-form-status');
+
+        if (title) title.innerText = 'Editar Veículo';
+        if (idInput) idInput.value = v.id;
+        if (plateInput) plateInput.value = v.plate;
+        if (modelInput) modelInput.value = v.model;
+        if (brandInput) brandInput.value = v.brand;
+        if (yearInput) yearInput.value = v.year || '';
+        if (statusInput) statusInput.value = v.status;
         openModal('modal-vehicle');
       } catch (err) {
         showToast(\`Erro ao abrir veículo: \${err.message}\`, 'error');
@@ -1705,15 +1857,15 @@ export class AdminWebController {
 
     async function handleVehicleSubmit(e) {
       e.preventDefault();
-      const id = document.getElementById('vehicle-form-id').value;
+      const id = document.getElementById('vehicle-form-id')?.value;
       const isEdit = Boolean(id);
 
       const payload = {
-        plate: document.getElementById('vehicle-form-plate').value.trim().toUpperCase(),
-        model: document.getElementById('vehicle-form-model').value.trim(),
-        brand: document.getElementById('vehicle-form-brand').value.trim(),
-        year: document.getElementById('vehicle-form-year').value ? parseInt(document.getElementById('vehicle-form-year').value) : undefined,
-        status: document.getElementById('vehicle-form-status').value,
+        plate: document.getElementById('vehicle-form-plate')?.value.trim().toUpperCase(),
+        model: document.getElementById('vehicle-form-model')?.value.trim(),
+        brand: document.getElementById('vehicle-form-brand')?.value.trim(),
+        year: document.getElementById('vehicle-form-year')?.value ? parseInt(document.getElementById('vehicle-form-year').value) : undefined,
+        status: document.getElementById('vehicle-form-status')?.value,
       };
 
       try {
@@ -1737,40 +1889,34 @@ export class AdminWebController {
       }
     }
 
-    // INITIALIZATION & LISTENERS REGISTRATION
-    function initAdminPanel() {
-      console.log('[ADMIN] script carregado');
-
+    // 1. ISOLATED LOGIN INITIALIZATION
+    function initLogin() {
       const loginForm = document.getElementById('login-form');
-      const submitBtn = document.getElementById('login-submit-btn');
+      const togglePwdBtn = document.getElementById('toggle-pwd-btn');
 
       if (!loginForm) {
         console.error('[ADMIN] login-form não encontrado');
-      } else {
-        console.log('[ADMIN] login-form encontrado');
-        loginForm.addEventListener('submit', handleLogin);
+        updateDiag('diag-form', 'NÃO', 'var(--rose-base)');
+        updateDiag('diag-listener', 'NÃO', 'var(--rose-base)');
+        return;
       }
 
-      if (submitBtn) {
-        submitBtn.addEventListener('click', (e) => {
-          // Se o botão for clicado, garante o submit do form
-          if (loginForm && !loginForm.checkValidity()) {
-            return; // Permite que a validação HTML nativa exiba campos obrigatórios
-          }
-          if (e && e.type === 'click' && loginForm) {
-            // submit event dispara naturalmente ou handleLogin pode ser invocado
-          }
-        });
-      }
+      console.log('[ADMIN] login-form encontrado');
+      updateDiag('diag-form', 'SIM', 'var(--emerald-base)');
 
-      const togglePwdBtn = document.getElementById('toggle-pwd-btn');
+      loginForm.addEventListener('submit', handleLogin);
+      updateDiag('diag-listener', 'SIM', 'var(--emerald-base)');
+
       if (togglePwdBtn) {
         togglePwdBtn.addEventListener('click', () => {
           const input = document.getElementById('login-password');
           if (input) input.type = input.type === 'password' ? 'text' : 'password';
         });
       }
+    }
 
+    // 2. ISOLATED APP & MODAL EVENT LISTENERS
+    function initAppFeatures() {
       const formUser = document.getElementById('form-user');
       if (formUser) formUser.addEventListener('submit', handleUserSubmit);
 
@@ -1813,11 +1959,47 @@ export class AdminWebController {
       });
 
       renderIcons(document);
+    }
 
+    // 3. ISOLATED SESSION RESTORATION
+    function initSession() {
       if (STATE.token && STATE.user) {
         showApp();
       }
     }
+
+    // MASTER BOOTSTRAP INITIALIZATION
+    function initAdminPanel() {
+      console.log('[ADMIN] script carregado');
+      updateDiag('diag-dom', 'SIM', 'var(--emerald-base)');
+
+      // O LOGIN É INICIALIZADO PRIMEIRO E ISOLADO
+      try {
+        initLogin();
+      } catch (loginErr) {
+        console.error('[ADMIN] Erro ao inicializar login:', loginErr);
+        updateDiag('diag-error', 'Erro initLogin: ' + loginErr.message, 'var(--rose-base)');
+      }
+
+      // INICIALIZAÇÃO DE RECURSOS DO PAINEL
+      try {
+        initAppFeatures();
+      } catch (appErr) {
+        console.error('[ADMIN] Erro ao inicializar recursos:', appErr);
+      }
+
+      // RESTAURAÇÃO DE SESSÃO
+      try {
+        initSession();
+      } catch (sessionErr) {
+        console.error('[ADMIN] Erro ao restaurar sessão:', sessionErr);
+      }
+    }
+
+    // BOOTSTRAP EXECUTION
+    try {
+      updateDiag('diag-js', 'SIM', 'var(--emerald-base)');
+    } catch (e) {}
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initAdminPanel);
