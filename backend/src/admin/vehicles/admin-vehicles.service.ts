@@ -72,11 +72,24 @@ export class AdminVehiclesService {
       where: { id },
       include: {
         assignments: {
-          where: { isCurrent: true },
+          orderBy: { createdAt: 'desc' },
           include: {
             driver: {
               include: {
-                user: true,
+                user: {
+                  select: { id: true, name: true, phone: true, cpf: true },
+                },
+              },
+            },
+          },
+        },
+        trips: {
+          take: 15,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            driver: {
+              include: {
+                user: { select: { name: true } },
               },
             },
           },

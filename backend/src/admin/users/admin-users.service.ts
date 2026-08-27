@@ -12,7 +12,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { Role } from '@prisma/client';
+import { Role, TripStatus, RomaneioStatus, TollStatus, InvoiceStatus, DeliveryStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 @Injectable()
@@ -547,6 +547,11 @@ export class AdminUsersService {
       pendingTolls,
       openOccurrences,
       pendingSettlements,
+      recentTrips,
+      recentOccurrences,
+      recentTolls,
+      unassignedDrivers,
+      unlinkedDriversList,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { status: 'ACTIVE' } }),
@@ -567,6 +572,46 @@ export class AdminUsersService {
       this.prisma.toll.count({ where: { status: 'PENDING' } }),
       this.prisma.occurrence.count({ where: { status: { in: ['OPEN', 'IN_REVIEW'] } } }),
       this.prisma.financialSettlement.count({ where: { status: 'PENDING' } }),
+      this.prisma.trip.findMany({
+        take: 6,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { include: { user: { select: { name: true } } } },
+          vehicle: { select: { plate: true, model: true } },
+        },
+      }),
+      this.prisma.occurrence.findMany({
+        take: 6,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { include: { user: { select: { name: true } } } },
+          trip: { select: { tripCode: true } },
+        },
+      }),
+      this.prisma.toll.findMany({
+        take: 6,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { include: { user: { select: { name: true } } } },
+          trip: { select: { tripCode: true } },
+        },
+      }),
+      this.prisma.driver.findMany({
+        where: {
+          assignments: {
+            none: { isCurrent: true },
+          },
+        },
+        take: 6,
+        include: {
+          user: { select: { name: true, phone: true } },
+        },
+      }),
+      this.prisma.driver.findMany({
+        where: { userId: null },
+        take: 6,
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     const availableDrivers = Math.max(0, activeDrivers - inProgressTrips);
@@ -588,6 +633,11 @@ export class AdminUsersService {
       pendingTolls,
       openOccurrences,
       pendingSettlements,
+      recentTrips,
+      recentOccurrences,
+      recentTolls,
+      unassignedDrivers,
+      unlinkedDriversList,
     };
   }
 
@@ -733,10 +783,608 @@ export class AdminUsersService {
     });
   }
 
-  async listAuditLogs(limit = 100) {
+  async listAuditLogs(limit = 100, query?: { userId?: string; action?: string }) {
+    const where: any = {};
+    if (query?.userId) where.actorUserId = query.userId;
+    if (query?.action) where.action = query.action;
+
     return this.prisma.auditLog.findMany({
+      where,
       take: limit,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getDriverDetails(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
+            phone: true,
+            role: true,
+            status: true,
+            lastLoginAt: true,
+            createdAt: true,
+          },
+        },
+        assignments: {
+          orderBy: { createdAt: 'desc' },
+          include: { vehicle: true },
+        },
+        trips: {
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            vehicle: { select: { plate: true, model: true } },
+            _count: { select: { deliveries: true, invoices: true, occurrences: true } },
+          },
+        },
+        tolls: {
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+          include: { receipts: true },
+        },
+        settlements: {
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+          include: { items: true, payments: true },
+        },
+        occurrences: {
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+          include: { trip: { select: { tripCode: true } } },
+        },
+        lastLocation: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Motorista com ID ${driverId} não encontrado`);
+    }
+
+    return driver;
+  }
+
+  async assignDriverVehicle(driverId: string, vehicleId: string, actor?: { id: string }) {
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) throw new NotFoundException(`Motorista não encontrado`);
+
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    if (!vehicle) throw new NotFoundException(`Veículo não encontrado`);
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Fechar vínculos atuais do motorista e do veículo
+      await tx.driverVehicleAssignment.updateMany({
+        where: {
+          OR: [{ driverId, isCurrent: true }, { vehicleId, isCurrent: true }],
+        },
+        data: { isCurrent: false, endAt: new Date() },
+      });
+
+      // 2. Criar novo vínculo
+      const assignment = await tx.driverVehicleAssignment.create({
+        data: {
+          driverId,
+          vehicleId,
+          isCurrent: true,
+          startAt: new Date(),
+        },
+        include: { vehicle: true, driver: { include: { user: true } } },
+      });
+
+      // 3. Atualizar status do veículo para EM_USO se ativo
+      if (vehicle.status === 'DISPONIVEL') {
+        await tx.vehicle.update({
+          where: { id: vehicleId },
+          data: { status: 'EM_USO' },
+        });
+      }
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: 'DRIVER_VEHICLE_ASSIGNED',
+        targetUserId: driver.userId || null,
+        metadata: { driverId, vehicleId, plate: vehicle.plate },
+        prismaClient: tx,
+      });
+
+      return assignment;
+    });
+  }
+
+  async unassignDriverVehicle(driverId: string, actor?: { id: string }) {
+    const currentAssignment = await this.prisma.driverVehicleAssignment.findFirst({
+      where: { driverId, isCurrent: true },
+      include: { vehicle: true },
+    });
+
+    if (!currentAssignment) {
+      throw new BadRequestException('Motorista não possui nenhum veículo vinculado no momento.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.driverVehicleAssignment.update({
+        where: { id: currentAssignment.id },
+        data: { isCurrent: false, endAt: new Date() },
+      });
+
+      if (currentAssignment.vehicle) {
+        await tx.vehicle.update({
+          where: { id: currentAssignment.vehicleId },
+          data: { status: 'DISPONIVEL' },
+        });
+      }
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: 'DRIVER_VEHICLE_UNASSIGNED',
+        targetUserId: null,
+        metadata: { driverId, vehicleId: currentAssignment.vehicleId },
+        prismaClient: tx,
+      });
+
+      return { success: true, message: 'Vínculo desfeito com sucesso.' };
+    });
+  }
+
+  async updateDriverStatus(driverId: string, status: string, actor?: { id: string }) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      include: { user: true },
+    });
+    if (!driver) throw new NotFoundException('Motorista não encontrado');
+
+    const updated = await this.prisma.driver.update({
+      where: { id: driverId },
+      data: { status },
+    });
+
+    // Se possui usuário vinculado, alinhar status do User
+    if (driver.userId) {
+      const userStatus = status === 'ATIVO' ? 'ACTIVE' : status === 'BLOQUEADO' ? 'BLOCKED' : 'INACTIVE';
+      await this.prisma.user.update({
+        where: { id: driver.userId },
+        data: { status: userStatus },
+      });
+    }
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'DRIVER_STATUS_UPDATED',
+      targetUserId: driver.userId || null,
+      metadata: { driverId, previousStatus: driver.status, newStatus: status },
+    });
+
+    return updated;
+  }
+
+  async listAdminTrips(query?: {
+    status?: string;
+    driverId?: string;
+    vehicleId?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const where: any = {};
+
+    if (query?.status) where.status = query.status;
+    if (query?.driverId) where.driverId = query.driverId;
+    if (query?.vehicleId) where.vehicleId = query.vehicleId;
+
+    if (query?.search) {
+      where.OR = [
+        { tripCode: { contains: query.search.trim(), mode: 'insensitive' } },
+        { origin: { contains: query.search.trim(), mode: 'insensitive' } },
+        { destination: { contains: query.search.trim(), mode: 'insensitive' } },
+        { driver: { user: { name: { contains: query.search.trim(), mode: 'insensitive' } } } },
+        { vehicle: { plate: { contains: query.search.trim().toUpperCase() } } },
+      ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
+    }
+
+    return this.prisma.trip.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        vehicle: true,
+        _count: {
+          select: {
+            stops: true,
+            deliveries: true,
+            invoices: true,
+            ctes: true,
+            romaneios: true,
+            tolls: true,
+            occurrences: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getAdminTripById(id: string) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true, status: true } },
+          },
+        },
+        vehicle: true,
+        stops: { orderBy: { stopOrder: 'asc' } },
+        deliveries: {
+          orderBy: { sequence: 'asc' },
+          include: {
+            invoices: true,
+            occurrences: true,
+          },
+        },
+        invoices: true,
+        ctes: true,
+        romaneios: {
+          include: { documents: true },
+        },
+        tolls: {
+          include: { receipts: true },
+        },
+        settlements: {
+          include: { items: true, payments: true },
+        },
+        occurrences: true,
+        lastLocations: {
+          take: 1,
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+    }
+
+    return trip;
+  }
+
+  async updateAdminTripStatus(
+    id: string,
+    status: TripStatus,
+    notes?: string,
+    actor?: { id: string },
+  ) {
+    const trip = await this.prisma.trip.findUnique({ where: { id } });
+    if (!trip) throw new NotFoundException(`Viagem não encontrada`);
+
+    const updateData: any = { status };
+    if (notes) updateData.notes = notes;
+    if (status === TripStatus.COMPLETED && !trip.endDate) {
+      updateData.endDate = new Date();
+    }
+    if (status === TripStatus.IN_PROGRESS && !trip.startDate) {
+      updateData.startDate = new Date();
+    }
+
+    const updated = await this.prisma.trip.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'ADMIN_TRIP_STATUS_UPDATED',
+      metadata: { tripId: id, tripCode: trip.tripCode, previousStatus: trip.status, newStatus: status },
+    });
+
+    return updated;
+  }
+
+  async listAdminRomaneios(query?: {
+    status?: RomaneioStatus;
+    driverId?: string;
+    tripId?: string;
+    search?: string;
+  }) {
+    const where: any = {};
+    if (query?.status) where.status = query.status;
+    if (query?.driverId) where.driverId = query.driverId;
+    if (query?.tripId) where.tripId = query.tripId;
+    if (query?.search) {
+      where.OR = [
+        { romaneioCode: { contains: query.search.trim(), mode: 'insensitive' } },
+        { driver: { user: { name: { contains: query.search.trim(), mode: 'insensitive' } } } },
+      ];
+    }
+
+    return this.prisma.romaneio.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true } },
+          },
+        },
+        trip: { select: { id: true, tripCode: true, origin: true, destination: true } },
+        documents: true,
+      },
+    });
+  }
+
+  async getAdminRomaneioById(id: string) {
+    const romaneio = await this.prisma.romaneio.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: {
+          include: {
+            vehicle: true,
+            invoices: true,
+          },
+        },
+        documents: true,
+      },
+    });
+
+    if (!romaneio) throw new NotFoundException(`Romaneio não encontrado`);
+    return romaneio;
+  }
+
+  async updateAdminRomaneioStatus(
+    id: string,
+    status: RomaneioStatus,
+    notes?: string,
+    actor?: { id: string },
+  ) {
+    const romaneio = await this.prisma.romaneio.findUnique({ where: { id } });
+    if (!romaneio) throw new NotFoundException(`Romaneio não encontrado`);
+
+    const updateData: any = { status };
+    if (notes) updateData.notes = notes;
+
+    const updated = await this.prisma.romaneio.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'ADMIN_ROMANEIO_STATUS_UPDATED',
+      metadata: { romaneioId: id, romaneioCode: romaneio.romaneioCode, previousStatus: romaneio.status, newStatus: status },
+    });
+
+    return updated;
+  }
+
+  async listAdminInvoices(query?: {
+    status?: InvoiceStatus;
+    tripId?: string;
+    search?: string;
+  }) {
+    const where: any = {};
+    if (query?.status) where.status = query.status;
+    if (query?.tripId) where.tripId = query.tripId;
+
+    if (query?.search) {
+      const clean = query.search.trim();
+      where.OR = [
+        { number: { contains: clean } },
+        { accessKey: { contains: clean } },
+        { recipient: { contains: clean, mode: 'insensitive' } },
+        { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
+      ];
+    }
+
+    return this.prisma.invoice.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        trip: {
+          select: {
+            id: true,
+            tripCode: true,
+            driver: { include: { user: { select: { name: true } } } },
+          },
+        },
+        delivery: {
+          select: {
+            id: true,
+            recipient: true,
+            status: true,
+            city: true,
+            state: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getAdminInvoiceById(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        trip: {
+          include: {
+            driver: { include: { user: true } },
+            vehicle: true,
+          },
+        },
+        delivery: {
+          include: {
+            occurrences: true,
+          },
+        },
+      },
+    });
+
+    if (!invoice) throw new NotFoundException(`Nota Fiscal não encontrada`);
+    return invoice;
+  }
+
+  async listAdminTolls(query?: {
+    status?: TollStatus;
+    driverId?: string;
+    tripId?: string;
+  }) {
+    const where: any = {};
+    if (query?.status) where.status = query.status;
+    if (query?.driverId) where.driverId = query.driverId;
+    if (query?.tripId) where.tripId = query.tripId;
+
+    return this.prisma.toll.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: { select: { id: true, tripCode: true, origin: true, destination: true } },
+        receipts: true,
+      },
+    });
+  }
+
+  async getAdminTollById(id: string) {
+    const toll = await this.prisma.toll.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: true,
+        receipts: true,
+      },
+    });
+
+    if (!toll) throw new NotFoundException(`Pedágio não encontrado`);
+    return toll;
+  }
+
+  async updateAdminTollStatus(
+    id: string,
+    status: TollStatus,
+    actor?: { id: string },
+  ) {
+    const toll = await this.prisma.toll.findUnique({ where: { id } });
+    if (!toll) throw new NotFoundException(`Pedágio não encontrado`);
+
+    const updated = await this.prisma.toll.update({
+      where: { id },
+      data: { status },
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'ADMIN_TOLL_STATUS_UPDATED',
+      metadata: { tollId: id, previousStatus: toll.status, newStatus: status, amount: toll.amount },
+    });
+
+    return updated;
+  }
+
+  async listAdminSettlements(query?: {
+    status?: string;
+    driverId?: string;
+    period?: string;
+  }) {
+    const where: any = {};
+    if (query?.status) where.status = query.status;
+    if (query?.driverId) where.driverId = query.driverId;
+    if (query?.period) {
+      where.OR = [
+        { periodStart: { contains: query.period } },
+        { periodEnd: { contains: query.period } },
+      ];
+    }
+
+    return this.prisma.financialSettlement.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: { select: { id: true, tripCode: true } },
+        items: true,
+        payments: true,
+      },
+    });
+  }
+
+  async getAdminSettlementById(id: string) {
+    const settlement = await this.prisma.financialSettlement.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: {
+          include: {
+            vehicle: true,
+            invoices: true,
+          },
+        },
+        items: {
+          orderBy: { createdAt: 'asc' },
+        },
+        payments: {
+          orderBy: { paymentDate: 'desc' },
+        },
+      },
+    });
+
+    if (!settlement) throw new NotFoundException(`Fechamento financeiro não encontrado`);
+    return settlement;
+  }
+
+  async getOccurrenceById(id: string) {
+    const occurrence = await this.prisma.occurrence.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
+          },
+        },
+        trip: {
+          include: {
+            vehicle: true,
+          },
+        },
+        delivery: true,
+      },
+    });
+
+    if (!occurrence) throw new NotFoundException(`Ocorrência não encontrada`);
+    return occurrence;
   }
 }
