@@ -532,6 +532,8 @@ export class AdminUsersService {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
     const [
       totalUsers,
       activeUsers,
@@ -539,15 +541,23 @@ export class AdminUsersService {
       totalDrivers,
       activeDrivers,
       erpOnlyDrivers,
+      driversWithoutVehicle,
       totalVehicles,
       activeVehicles,
       pendingTrips,
       inProgressTrips,
+      completedTrips,
       completedTripsToday,
       pendingTolls,
+      pendingRomaneios,
       openOccurrences,
-      pendingSettlements,
+      pendingSettlementsCount,
+      pendingSettlementsAggregate,
+      pendingTollsAggregate,
+      recentLocationsCount,
+      erpFailuresCount,
       recentTrips,
+      inProgressTripsList,
       recentOccurrences,
       recentTolls,
       unassignedDrivers,
@@ -559,10 +569,18 @@ export class AdminUsersService {
       this.prisma.driver.count(),
       this.prisma.driver.count({ where: { status: 'ATIVO' } }),
       this.prisma.driver.count({ where: { userId: null } }),
+      this.prisma.driver.count({
+        where: {
+          assignments: {
+            none: { isCurrent: true },
+          },
+        },
+      }),
       this.prisma.vehicle.count(),
-      this.prisma.vehicle.count({ where: { status: 'DISPONIVEL' } }),
-      this.prisma.trip.count({ where: { status: { in: ['ASSIGNED', 'PENDING'] } } }),
-      this.prisma.trip.count({ where: { status: { in: ['IN_PROGRESS', 'ACCEPTED'] } } }),
+      this.prisma.vehicle.count({ where: { status: { not: 'INATIVO' } } }),
+      this.prisma.trip.count({ where: { status: { in: ['ASSIGNED', 'PENDING', 'ACCEPTED'] } } }),
+      this.prisma.trip.count({ where: { status: 'IN_PROGRESS' } }),
+      this.prisma.trip.count({ where: { status: 'COMPLETED' } }),
       this.prisma.trip.count({
         where: {
           status: 'COMPLETED',
@@ -570,18 +588,42 @@ export class AdminUsersService {
         },
       }),
       this.prisma.toll.count({ where: { status: 'PENDING' } }),
-      this.prisma.occurrence.count({ where: { status: { in: ['OPEN', 'IN_REVIEW'] } } }),
+      this.prisma.romaneio.count({ where: { status: 'PENDING' } }),
+      this.prisma.occurrence.count({ where: { status: { in: ['OPEN', 'IN_ANALYSIS', 'IN_REVIEW'] } } }),
       this.prisma.financialSettlement.count({ where: { status: 'PENDING' } }),
+      this.prisma.financialSettlement.aggregate({
+        where: { status: 'PENDING' },
+        _sum: { netAmount: true },
+      }),
+      this.prisma.toll.aggregate({
+        where: { status: 'PENDING' },
+        _sum: { amount: true },
+      }),
+      this.prisma.driverLastLocation.count({
+        where: { capturedAt: { gte: fifteenMinutesAgo } },
+      }),
+      this.prisma.idempotencyRecord.count({
+        where: { statusCode: { gte: 400 } },
+      }),
       this.prisma.trip.findMany({
-        take: 6,
+        take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
-          driver: { include: { user: { select: { name: true } } } },
+          driver: { include: { user: { select: { name: true, phone: true } } } },
+          vehicle: { select: { plate: true, model: true, brand: true } },
+        },
+      }),
+      this.prisma.trip.findMany({
+        where: { status: 'IN_PROGRESS' },
+        take: 8,
+        orderBy: { startDate: 'desc' },
+        include: {
+          driver: { include: { user: { select: { name: true, phone: true } } } },
           vehicle: { select: { plate: true, model: true } },
         },
       }),
       this.prisma.occurrence.findMany({
-        take: 6,
+        take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true } } } },
@@ -589,7 +631,7 @@ export class AdminUsersService {
         },
       }),
       this.prisma.toll.findMany({
-        take: 6,
+        take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true } } } },
@@ -602,19 +644,22 @@ export class AdminUsersService {
             none: { isCurrent: true },
           },
         },
-        take: 6,
+        take: 8,
         include: {
-          user: { select: { name: true, phone: true } },
+          user: { select: { id: true, name: true, phone: true, cpf: true } },
         },
       }),
       this.prisma.driver.findMany({
         where: { userId: null },
-        take: 6,
+        take: 8,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
 
     const availableDrivers = Math.max(0, activeDrivers - inProgressTrips);
+    const driversNoSignalCount = Math.max(0, activeDrivers - recentLocationsCount);
+    const pendingSettlementsAmount = pendingSettlementsAggregate._sum.netAmount || 0;
+    const pendingTollsAmount = pendingTollsAggregate._sum.amount || 0;
 
     return {
       totalUsers,
@@ -624,16 +669,26 @@ export class AdminUsersService {
       activeDrivers,
       inTripDrivers: inProgressTrips,
       availableDrivers,
+      driversWithoutVehicle,
       erpOnlyDrivers,
       totalVehicles,
       activeVehicles,
       pendingTrips,
       inProgressTrips,
+      completedTrips,
       completedTripsToday,
       pendingTolls,
+      pendingTollsAmount,
+      pendingRomaneios,
       openOccurrences,
-      pendingSettlements,
+      pendingSettlements: pendingSettlementsCount,
+      pendingSettlementsCount,
+      pendingSettlementsAmount,
+      driversNoSignalCount,
+      recentLocationsCount,
+      erpFailuresCount,
       recentTrips,
+      inProgressTripsList,
       recentOccurrences,
       recentTolls,
       unassignedDrivers,
@@ -677,10 +732,39 @@ export class AdminUsersService {
     });
   }
 
-  async listAllOccurrences(query?: { status?: string; type?: string }) {
+  async listAllOccurrences(query?: {
+    status?: string;
+    type?: string;
+    driverId?: string;
+    tripId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.type) where.type = query.type;
+    if (query?.driverId) where.driverId = query.driverId;
+    if (query?.tripId) where.tripId = query.tripId;
+
+    if (query?.search) {
+      const clean = query.search.trim();
+      where.OR = [
+        { title: { contains: clean, mode: 'insensitive' } },
+        { description: { contains: clean, mode: 'insensitive' } },
+        { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
+        { driver: { user: { name: { contains: clean, mode: 'insensitive' } } } },
+      ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
+    }
 
     return this.prisma.occurrence.findMany({
       where,
@@ -688,7 +772,7 @@ export class AdminUsersService {
       include: {
         driver: {
           include: {
-            user: { select: { name: true, phone: true, cpf: true } },
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
         trip: {
@@ -698,34 +782,58 @@ export class AdminUsersService {
             origin: true,
             destination: true,
             status: true,
+            vehicle: { select: { id: true, plate: true, model: true } },
           },
         },
         delivery: {
           select: {
             id: true,
-            recipientName: true,
+            recipient: true,
             status: true,
+            city: true,
+            state: true,
           },
         },
       },
     });
   }
 
-  async updateOccurrenceStatus(id: string, status: string, actor?: { id: string }) {
+  async updateOccurrenceStatus(
+    id: string,
+    status: string,
+    resolutionNotes?: string,
+    actor?: { id: string },
+  ) {
     const occurrence = await this.prisma.occurrence.findUnique({ where: { id } });
     if (!occurrence) {
       throw new NotFoundException(`Ocorrência com ID ${id} não encontrada`);
     }
 
+    const updateData: any = { status };
+    if (resolutionNotes) {
+      updateData.description = occurrence.description
+        ? `${occurrence.description}\n[Atualização Admin]: ${resolutionNotes}`
+        : resolutionNotes;
+    }
+
     const updated = await this.prisma.occurrence.update({
       where: { id },
-      data: { status },
+      data: updateData,
+      include: {
+        driver: { include: { user: { select: { name: true } } } },
+        trip: true,
+      },
     });
 
     await this.auditService.log({
       actorUserId: actor?.id || null,
       action: 'OCCURRENCE_STATUS_UPDATED',
-      metadata: { occurrenceId: id, previousStatus: occurrence.status, newStatus: status },
+      metadata: {
+        occurrenceId: id,
+        previousStatus: occurrence.status,
+        newStatus: status,
+        resolutionNotes,
+      },
     });
 
     return updated;
@@ -1070,8 +1178,37 @@ export class AdminUsersService {
     notes?: string,
     actor?: { id: string },
   ) {
-    const trip = await this.prisma.trip.findUnique({ where: { id } });
-    if (!trip) throw new NotFoundException(`Viagem não encontrada`);
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { vehicle: true, driver: { include: { user: true } } },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status === status) {
+      return trip;
+    }
+
+    // Regras de transição estrita
+    if (trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Viagem já concluída não pode ter seu status alterado.');
+    }
+
+    if (trip.status === TripStatus.CANCELLED) {
+      throw new BadRequestException('Viagem cancelada não pode ser reativada.');
+    }
+
+    if (status === TripStatus.COMPLETED) {
+      if (trip.status !== TripStatus.IN_PROGRESS) {
+        throw new BadRequestException('Apenas viagens em andamento (EM_ANDAMENTO) podem ser concluídas.');
+      }
+    }
+
+    if (status === TripStatus.IN_PROGRESS) {
+      const allowedPrevious = [TripStatus.ASSIGNED, TripStatus.PENDING, TripStatus.ACCEPTED];
+      if (!allowedPrevious.includes(trip.status)) {
+        throw new BadRequestException(`Não é possível iniciar viagem que está no status ${trip.status}.`);
+      }
+    }
 
     const updateData: any = { status };
     if (notes) updateData.notes = notes;
@@ -1085,12 +1222,16 @@ export class AdminUsersService {
     const updated = await this.prisma.trip.update({
       where: { id },
       data: updateData,
+      include: {
+        driver: { include: { user: { select: { name: true, phone: true } } } },
+        vehicle: true,
+      },
     });
 
     await this.auditService.log({
       actorUserId: actor?.id || null,
       action: 'ADMIN_TRIP_STATUS_UPDATED',
-      metadata: { tripId: id, tripCode: trip.tripCode, previousStatus: trip.status, newStatus: status },
+      metadata: { tripId: id, tripCode: trip.tripCode, previousStatus: trip.status, newStatus: status, notes },
     });
 
     return updated;
@@ -1101,16 +1242,30 @@ export class AdminUsersService {
     driverId?: string;
     tripId?: string;
     search?: string;
+    startDate?: string;
+    endDate?: string;
   }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.driverId) where.driverId = query.driverId;
     if (query?.tripId) where.tripId = query.tripId;
+
     if (query?.search) {
+      const clean = query.search.trim();
       where.OR = [
-        { romaneioCode: { contains: query.search.trim(), mode: 'insensitive' } },
-        { driver: { user: { name: { contains: query.search.trim(), mode: 'insensitive' } } } },
+        { romaneioCode: { contains: clean, mode: 'insensitive' } },
+        { driver: { user: { name: { contains: clean, mode: 'insensitive' } } } },
+        { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
       ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
     }
 
     return this.prisma.romaneio.findMany({
@@ -1119,10 +1274,18 @@ export class AdminUsersService {
       include: {
         driver: {
           include: {
-            user: { select: { id: true, name: true, phone: true } },
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
-        trip: { select: { id: true, tripCode: true, origin: true, destination: true } },
+        trip: {
+          select: {
+            id: true,
+            tripCode: true,
+            origin: true,
+            destination: true,
+            vehicle: { select: { id: true, plate: true, model: true } },
+          },
+        },
         documents: true,
       },
     });
@@ -1171,7 +1334,7 @@ export class AdminUsersService {
     await this.auditService.log({
       actorUserId: actor?.id || null,
       action: 'ADMIN_ROMANEIO_STATUS_UPDATED',
-      metadata: { romaneioId: id, romaneioCode: romaneio.romaneioCode, previousStatus: romaneio.status, newStatus: status },
+      metadata: { romaneioId: id, romaneioCode: romaneio.romaneioCode, previousStatus: romaneio.status, newStatus: status, notes },
     });
 
     return updated;
@@ -1180,11 +1343,15 @@ export class AdminUsersService {
   async listAdminInvoices(query?: {
     status?: InvoiceStatus;
     tripId?: string;
+    driverId?: string;
     search?: string;
+    startDate?: string;
+    endDate?: string;
   }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.tripId) where.tripId = query.tripId;
+    if (query?.driverId) where.trip = { driverId: query.driverId };
 
     if (query?.search) {
       const clean = query.search.trim();
@@ -1193,7 +1360,17 @@ export class AdminUsersService {
         { accessKey: { contains: clean } },
         { recipient: { contains: clean, mode: 'insensitive' } },
         { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
+        { trip: { driver: { user: { name: { contains: clean, mode: 'insensitive' } } } } },
       ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
     }
 
     return this.prisma.invoice.findMany({
@@ -1204,7 +1381,8 @@ export class AdminUsersService {
           select: {
             id: true,
             tripCode: true,
-            driver: { include: { user: { select: { name: true } } } },
+            driver: { include: { user: { select: { name: true, phone: true } } } },
+            vehicle: { select: { id: true, plate: true, model: true } },
           },
         },
         delivery: {
@@ -1214,6 +1392,7 @@ export class AdminUsersService {
             status: true,
             city: true,
             state: true,
+            address: true,
           },
         },
       },
@@ -1246,11 +1425,33 @@ export class AdminUsersService {
     status?: TollStatus;
     driverId?: string;
     tripId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
   }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.driverId) where.driverId = query.driverId;
     if (query?.tripId) where.tripId = query.tripId;
+
+    if (query?.search) {
+      const clean = query.search.trim();
+      where.OR = [
+        { plazaName: { contains: clean, mode: 'insensitive' } },
+        { highway: { contains: clean, mode: 'insensitive' } },
+        { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
+        { driver: { user: { name: { contains: clean, mode: 'insensitive' } } } },
+      ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
+    }
 
     return this.prisma.toll.findMany({
       where,
@@ -1261,7 +1462,15 @@ export class AdminUsersService {
             user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
-        trip: { select: { id: true, tripCode: true, origin: true, destination: true } },
+        trip: {
+          select: {
+            id: true,
+            tripCode: true,
+            origin: true,
+            destination: true,
+            vehicle: { select: { id: true, plate: true, model: true } },
+          },
+        },
         receipts: true,
       },
     });
@@ -1276,7 +1485,11 @@ export class AdminUsersService {
             user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
-        trip: true,
+        trip: {
+          include: {
+            vehicle: true,
+          },
+        },
         receipts: true,
       },
     });
@@ -1288,6 +1501,7 @@ export class AdminUsersService {
   async updateAdminTollStatus(
     id: string,
     status: TollStatus,
+    notes?: string,
     actor?: { id: string },
   ) {
     const toll = await this.prisma.toll.findUnique({ where: { id } });
@@ -1301,7 +1515,7 @@ export class AdminUsersService {
     await this.auditService.log({
       actorUserId: actor?.id || null,
       action: 'ADMIN_TOLL_STATUS_UPDATED',
-      metadata: { tollId: id, previousStatus: toll.status, newStatus: status, amount: toll.amount },
+      metadata: { tollId: id, previousStatus: toll.status, newStatus: status, amount: toll.amount, notes },
     });
 
     return updated;
@@ -1311,6 +1525,9 @@ export class AdminUsersService {
     status?: string;
     driverId?: string;
     period?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
   }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
@@ -1319,7 +1536,27 @@ export class AdminUsersService {
       where.OR = [
         { periodStart: { contains: query.period } },
         { periodEnd: { contains: query.period } },
+        { settlementCode: { contains: query.period, mode: 'insensitive' } },
       ];
+    }
+
+    if (query?.search) {
+      const clean = query.search.trim();
+      where.OR = [
+        { settlementCode: { contains: clean, mode: 'insensitive' } },
+        { driver: { user: { name: { contains: clean, mode: 'insensitive' } } } },
+        { driver: { user: { cpf: { contains: clean } } } },
+        { trip: { tripCode: { contains: clean, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
     }
 
     return this.prisma.financialSettlement.findMany({
@@ -1331,9 +1568,11 @@ export class AdminUsersService {
             user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
-        trip: { select: { id: true, tripCode: true } },
+        trip: { select: { id: true, tripCode: true, origin: true, destination: true } },
         items: true,
-        payments: true,
+        payments: {
+          orderBy: { paymentDate: 'desc' },
+        },
       },
     });
   }
@@ -1366,25 +1605,480 @@ export class AdminUsersService {
     return settlement;
   }
 
-  async getOccurrenceById(id: string) {
-    const occurrence = await this.prisma.occurrence.findUnique({
+  async updateAdminSettlementStatus(
+    id: string,
+    data: {
+      status: string;
+      notes?: string;
+      paymentMethod?: string;
+      transactionId?: string;
+      receiptUrl?: string;
+    },
+    actor?: { id: string },
+  ) {
+    const settlement = await this.prisma.financialSettlement.findUnique({
       where: { id },
+      include: { payments: true },
+    });
+    if (!settlement) throw new NotFoundException(`Fechamento financeiro não encontrado`);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Se status for marcado como PAID e ainda não tiver pagamento registrado com o valor total
+      if (data.status === 'PAID') {
+        const hasFullPayment = settlement.payments.some((p) => p.status === 'PAID' && p.amount >= settlement.netAmount);
+        if (!hasFullPayment) {
+          await tx.payment.create({
+            data: {
+              settlementId: id,
+              amount: settlement.netAmount,
+              paymentMethod: data.paymentMethod || 'PIX',
+              transactionId: data.transactionId || `ADMIN-PAY-${Date.now()}`,
+              receiptUrl: data.receiptUrl || null,
+              status: 'PAID',
+              paymentDate: new Date(),
+            },
+          });
+        }
+      }
+
+      const updated = await tx.financialSettlement.update({
+        where: { id },
+        data: {
+          status: data.status,
+          updatedAt: new Date(),
+        },
+        include: {
+          driver: { include: { user: true } },
+          items: true,
+          payments: true,
+        },
+      });
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: 'ADMIN_SETTLEMENT_STATUS_UPDATED',
+        prismaClient: tx,
+        metadata: {
+          settlementId: id,
+          settlementCode: settlement.settlementCode,
+          previousStatus: settlement.status,
+          newStatus: data.status,
+          netAmount: settlement.netAmount,
+          notes: data.notes,
+          transactionId: data.transactionId,
+        },
+      });
+
+      return updated;
+    });
+
+    return result;
+  }
+
+  async listTrackingLocations() {
+    const now = Date.now();
+    const fifteenMinutesMs = 15 * 60 * 1000;
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+
+    // Buscar todos os motoristas com seus vínculos ativos, viagem atual e última localização
+    const drivers = await this.prisma.driver.findMany({
+      orderBy: { createdAt: 'desc' },
       include: {
-        driver: {
-          include: {
-            user: { select: { id: true, name: true, phone: true, cpf: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            cpf: true,
+            status: true,
           },
         },
-        trip: {
-          include: {
-            vehicle: true,
+        assignments: {
+          where: { isCurrent: true },
+          include: { vehicle: true },
+          take: 1,
+        },
+        trips: {
+          where: { status: 'IN_PROGRESS' },
+          take: 1,
+          select: {
+            id: true,
+            tripCode: true,
+            origin: true,
+            destination: true,
+            status: true,
+            startDate: true,
+            vehicle: { select: { plate: true, model: true } },
           },
         },
-        delivery: true,
+        lastLocation: true,
       },
     });
 
-    if (!occurrence) throw new NotFoundException(`Ocorrência não encontrada`);
-    return occurrence;
+    let recentCount = 0;
+    let outdatedCount = 0;
+    let noSignalCount = 0;
+    let inTripCount = 0;
+
+    const list = drivers.map((d) => {
+      const loc = d.lastLocation;
+      const activeTrip = d.trips && d.trips.length > 0 ? d.trips[0] : null;
+      if (activeTrip) inTripCount++;
+
+      let telemetryStatus: 'RECENT' | 'OUTDATED' | 'NO_SIGNAL' = 'NO_SIGNAL';
+      let statusLabel = 'SEM SINAL';
+      let minutesSinceLastUpdate: number | null = null;
+
+      if (loc && loc.capturedAt) {
+        const capturedTime = new Date(loc.capturedAt).getTime();
+        const diffMs = Math.max(0, now - capturedTime);
+        minutesSinceLastUpdate = Math.round(diffMs / 60000);
+
+        if (diffMs <= fifteenMinutesMs) {
+          telemetryStatus = 'RECENT';
+          statusLabel = 'RECENTE';
+          recentCount++;
+        } else if (diffMs <= twoHoursMs) {
+          telemetryStatus = 'OUTDATED';
+          statusLabel = 'DESATUALIZADA';
+          outdatedCount++;
+        } else {
+          telemetryStatus = 'NO_SIGNAL';
+          statusLabel = 'SEM SINAL';
+          noSignalCount++;
+        }
+      } else {
+        noSignalCount++;
+      }
+
+      const vehicle = activeTrip?.vehicle || (d.assignments[0]?.vehicle ? d.assignments[0].vehicle : null);
+
+      return {
+        driverId: d.id,
+        driverName: d.user?.name || 'Motorista ERP',
+        driverPhone: d.user?.phone || null,
+        driverCpf: d.user?.cpf || null,
+        userStatus: d.user?.status || 'INACTIVE',
+        vehiclePlate: vehicle?.plate || '-',
+        vehicleModel: vehicle?.model || '',
+        activeTrip: activeTrip
+          ? {
+              id: activeTrip.id,
+              tripCode: activeTrip.tripCode,
+              origin: activeTrip.origin,
+              destination: activeTrip.destination,
+              startDate: activeTrip.startDate,
+            }
+          : null,
+        telemetry: loc
+          ? {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              speed: loc.speed !== null ? Math.round(loc.speed) : null,
+              accuracy: loc.accuracy !== null ? Math.round(loc.accuracy) : null,
+              heading: loc.heading !== null ? Math.round(loc.heading) : null,
+              capturedAt: loc.capturedAt,
+              receivedAt: loc.receivedAt,
+            }
+          : null,
+        telemetryStatus,
+        statusLabel,
+        minutesSinceLastUpdate,
+      };
+    });
+
+    return {
+      stats: {
+        totalDrivers: drivers.length,
+        inTripCount,
+        recentCount,
+        outdatedCount,
+        noSignalCount,
+      },
+      drivers: list,
+    };
+  }
+
+  async listErpLogs(options?: {
+    direction?: string;
+    status?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }) {
+    const limit = options?.limit ? Number(options.limit) : 50;
+
+    // 1. Inbound Logs (IdempotencyRecord)
+    const idempotencyWhere: any = {};
+    if (options?.search) {
+      const clean = options.search.trim();
+      idempotencyWhere.OR = [
+        { key: { contains: clean, mode: 'insensitive' } },
+        { endpoint: { contains: clean, mode: 'insensitive' } },
+      ];
+    }
+    if (options?.startDate) {
+      idempotencyWhere.createdAt = { ...(idempotencyWhere.createdAt || {}), gte: new Date(options.startDate) };
+    }
+    if (options?.endDate) {
+      const end = new Date(options.endDate);
+      end.setHours(23, 59, 59, 999);
+      idempotencyWhere.createdAt = { ...(idempotencyWhere.createdAt || {}), lte: end };
+    }
+    if (options?.status === 'SUCCESS') {
+      idempotencyWhere.statusCode = { lt: 400 };
+    } else if (options?.status === 'ERROR') {
+      idempotencyWhere.statusCode = { gte: 400 };
+    }
+
+    const inboundRecords = await this.prisma.idempotencyRecord.findMany({
+      where: idempotencyWhere,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    const inboundFormatted = inboundRecords.map((r) => {
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(r.response);
+      } catch {
+        parsed = { raw: r.response };
+      }
+
+      // Sanitizar respostas para nunca expor dados sensíveis
+      if (parsed) {
+        delete parsed.apiKey;
+        delete parsed.secret;
+        delete parsed.token;
+        delete parsed.password;
+        delete parsed.passwordHash;
+      }
+
+      const isError = r.statusCode >= 400 || (parsed && parsed.status === 'ERROR');
+
+      return {
+        id: r.id,
+        direction: 'INBOUND' as const,
+        directionLabel: 'ERP → HK CONNECT',
+        event: parsed?.event || r.endpoint || 'erp.webhook.received',
+        externalId: parsed?.externalId || parsed?.settlementCode || parsed?.paymentId || r.key,
+        idempotencyKey: r.key,
+        endpoint: r.endpoint || '/api/v1/integrations/erp/*',
+        statusCode: r.statusCode,
+        status: isError ? 'ERROR' : 'PROCESSED',
+        statusLabel: isError ? 'ERRO' : 'PROCESSADO',
+        error: isError ? (parsed?.message || parsed?.error || 'Erro no processamento do evento ERP') : null,
+        receivedAt: r.createdAt,
+        processedAt: r.updatedAt,
+        summary: parsed?.message || (parsed?.success ? 'Evento processado com sucesso' : 'Evento registrado'),
+        payloadSummary: parsed,
+      };
+    });
+
+    // 2. Outbound Events (AuditLog / HK CONNECT -> ERP)
+    const outboundWhere: any = {
+      action: { in: ['ERP_OUTBOUND_EVENT', 'POD_SENT_TO_ERP', 'OCCURRENCE_NOTIFIED_ERP', 'DELIVERY_STATUS_SYNCED'] },
+    };
+    if (options?.search) {
+      const clean = options.search.trim();
+      outboundWhere.OR = [
+        { action: { contains: clean, mode: 'insensitive' } },
+      ];
+    }
+    if (options?.startDate) {
+      outboundWhere.createdAt = { ...(outboundWhere.createdAt || {}), gte: new Date(options.startDate) };
+    }
+    if (options?.endDate) {
+      const end = new Date(options.endDate);
+      end.setHours(23, 59, 59, 999);
+      outboundWhere.createdAt = { ...(outboundWhere.createdAt || {}), lte: end };
+    }
+
+    const outboundRecords = await this.prisma.auditLog.findMany({
+      where: outboundWhere,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    const outboundFormatted = outboundRecords.map((a) => {
+      const meta = (a.metadata as any) || {};
+      return {
+        id: a.id,
+        direction: 'OUTBOUND' as const,
+        directionLabel: 'HK CONNECT → ERP',
+        event: meta.event || a.action,
+        externalId: meta.externalId || meta.tripCode || meta.documentNumber || a.targetUserId || '-',
+        idempotencyKey: meta.idempotencyKey || `OUT-${a.id.slice(0, 8)}`,
+        endpoint: meta.webhookUrl || 'HK ERP Webhook Queue',
+        statusCode: meta.statusCode || 200,
+        status: meta.status || 'PROCESSED',
+        statusLabel: meta.status === 'ERROR' ? 'ERRO' : (meta.status === 'PENDING' ? 'PENDENTE' : 'ENVIADO'),
+        error: meta.error || null,
+        receivedAt: a.createdAt,
+        processedAt: a.createdAt,
+        summary: meta.summary || meta.message || `Evento ${a.action} despachado`,
+        payloadSummary: meta,
+      };
+    });
+
+    let combined = [...inboundFormatted, ...outboundFormatted];
+    if (options?.direction === 'INBOUND') {
+      combined = inboundFormatted;
+    } else if (options?.direction === 'OUTBOUND') {
+      combined = outboundFormatted;
+    }
+
+    combined.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+
+    return {
+      stats: {
+        totalEvents: combined.length,
+        inboundCount: inboundFormatted.length,
+        outboundCount: outboundFormatted.length,
+        errorCount: combined.filter((e) => e.status === 'ERROR').length,
+      },
+      events: combined.slice(0, limit),
+    };
+  }
+
+  async listAuditLogs(
+    limit = 100,
+    query?: {
+      userId?: string;
+      action?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
+    const where: any = {};
+    if (query?.userId) {
+      where.OR = [
+        { actorUserId: query.userId },
+        { targetUserId: query.userId },
+      ];
+    }
+    if (query?.action) {
+      where.action = { contains: query.action, mode: 'insensitive' };
+    }
+    if (query?.search) {
+      const clean = query.search.trim();
+      where.OR = [
+        { action: { contains: clean, mode: 'insensitive' } },
+        { actorUserId: { contains: clean } },
+        { targetUserId: { contains: clean } },
+      ];
+    }
+    if (query?.startDate) {
+      where.createdAt = { ...(where.createdAt || {}), gte: new Date(query.startDate) };
+    }
+    if (query?.endDate) {
+      const end = new Date(query.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { ...(where.createdAt || {}), lte: end };
+    }
+
+    const logs = await this.prisma.auditLog.findMany({
+      where,
+      take: Math.min(Number(limit) || 100, 200),
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Enriquecer com nomes dos usuários atores
+    const actorUserIds = Array.from(new Set(logs.map((l) => l.actorUserId).filter(Boolean))) as string[];
+    const targetUserIds = Array.from(new Set(logs.map((l) => l.targetUserId).filter(Boolean))) as string[];
+    const allUserIds = Array.from(new Set([...actorUserIds, ...targetUserIds]));
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: allUserIds } },
+      select: { id: true, name: true, role: true, cpf: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return logs.map((log) => {
+      const actor = log.actorUserId ? userMap.get(log.actorUserId) : null;
+      const target = log.targetUserId ? userMap.get(log.targetUserId) : null;
+
+      // Sanitizar metadata para nunca vazar senhas/tokens/hashes
+      const sanitizedMetadata = log.metadata ? { ...(log.metadata as any) } : {};
+      delete sanitizedMetadata.password;
+      delete sanitizedMetadata.passwordHash;
+      delete sanitizedMetadata.token;
+      delete sanitizedMetadata.refreshToken;
+      delete sanitizedMetadata.secret;
+      delete sanitizedMetadata.apiKey;
+
+      return {
+        id: log.id,
+        action: log.action,
+        createdAt: log.createdAt,
+        actor: actor
+          ? {
+              id: actor.id,
+              name: actor.name,
+              role: actor.role,
+              cpf: actor.cpf,
+            }
+          : {
+              id: log.actorUserId || 'SYSTEM',
+              name: log.actorUserId ? 'Usuário do Sistema' : 'SISTEMA AUTOMÁTICO',
+              role: 'SYSTEM',
+              cpf: '',
+            },
+        target: target
+          ? {
+              id: target.id,
+              name: target.name,
+              role: target.role,
+            }
+          : log.targetUserId
+          ? { id: log.targetUserId, name: 'ID ' + log.targetUserId, role: 'N/A' }
+          : null,
+        metadata: sanitizedMetadata,
+      };
+    });
+  }
+
+  async getSystemConfig() {
+    let dbStatus = 'CONNECTED';
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbStatus = 'DISCONNECTED';
+    }
+
+    const uptimeSeconds = Math.round(process.uptime());
+    const hours = Math.floor(uptimeSeconds / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+
+    return {
+      environment: process.env.NODE_ENV || 'production',
+      backendVersion: '1.0.0',
+      backendFramework: 'NestJS 10.x / Node.js ' + process.version,
+      androidVersion: '1.0.0 (Build 1, Target SDK 34 / Android 14)',
+      database: {
+        engine: 'PostgreSQL 16 (Relacional)',
+        orm: 'Prisma ORM 5.x',
+        status: dbStatus,
+      },
+      security: {
+        passwordHashing: 'Argon2id (RFC 9106 Memory-Hard)',
+        tokenStrategy: 'Dual JWT RS256/HS256 + Refresh Token Rotation',
+        erpWebhookSecurity: 'HMAC-SHA256 Signature (x-hk-signature) + Nonce Timestamp',
+        idempotencyStore: 'PostgreSQL Idempotency Records with Key Index',
+        rbac: 'Hierarchical Role-Based Access Control (ADMIN, MANAGER, OPERATOR, DRIVER)',
+      },
+      integrations: {
+        erpWebhookInbound: '/api/v1/integrations/erp/*',
+        geocodingEngine: 'HK Route Engine (Active)',
+        telemetryFrequency: '15-min Interval SLA',
+      },
+      health: {
+        status: dbStatus === 'CONNECTED' ? 'HEALTHY' : 'DEGRADED',
+        uptime: `${hours}h ${minutes}m (${uptimeSeconds}s)`,
+        timestamp: new Date().toISOString(),
+      },
+    };
   }
 }

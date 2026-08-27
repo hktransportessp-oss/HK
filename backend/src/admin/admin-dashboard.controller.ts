@@ -115,8 +115,10 @@ export class AdminDashboardController {
     @Query('driverId') driverId?: string,
     @Query('tripId') tripId?: string,
     @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.adminUsersService.listAdminRomaneios({ status, driverId, tripId, search });
+    return this.adminUsersService.listAdminRomaneios({ status, driverId, tripId, search, startDate, endDate });
   }
 
   @Get('romaneios/:id')
@@ -142,9 +144,12 @@ export class AdminDashboardController {
   async listInvoices(
     @Query('status') status?: InvoiceStatus,
     @Query('tripId') tripId?: string,
+    @Query('driverId') driverId?: string,
     @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.adminUsersService.listAdminInvoices({ status, tripId, search });
+    return this.adminUsersService.listAdminInvoices({ status, tripId, driverId, search, startDate, endDate });
   }
 
   @Get('invoices/:id')
@@ -160,8 +165,11 @@ export class AdminDashboardController {
     @Query('status') status?: TollStatus,
     @Query('driverId') driverId?: string,
     @Query('tripId') tripId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
   ) {
-    return this.adminUsersService.listAdminTolls({ status, driverId, tripId });
+    return this.adminUsersService.listAdminTolls({ status, driverId, tripId, startDate, endDate, search });
   }
 
   @Get('tolls/:id')
@@ -175,9 +183,10 @@ export class AdminDashboardController {
   async updateTollStatus(
     @Param('id') id: string,
     @Body('status') status: TollStatus,
+    @Body('notes') notes?: string,
     @GetUser() actor?: { id: string },
   ) {
-    return this.adminUsersService.updateAdminTollStatus(id, status, actor);
+    return this.adminUsersService.updateAdminTollStatus(id, status, notes, actor);
   }
 
   // --- FINANCEIRO ---
@@ -187,8 +196,11 @@ export class AdminDashboardController {
     @Query('status') status?: string,
     @Query('driverId') driverId?: string,
     @Query('period') period?: string,
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.adminUsersService.listAdminSettlements({ status, driverId, period });
+    return this.adminUsersService.listAdminSettlements({ status, driverId, period, search, startDate, endDate });
   }
 
   @Get('settlements/:id')
@@ -197,14 +209,37 @@ export class AdminDashboardController {
     return this.adminUsersService.getAdminSettlementById(id);
   }
 
+  @Patch('settlements/:id/status')
+  @ApiOperation({ summary: 'Atualizar status do fechamento financeiro (Ex: PAID, CANCELLED)' })
+  async updateSettlementStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+    @Body('notes') notes?: string,
+    @Body('paymentMethod') paymentMethod?: string,
+    @Body('transactionId') transactionId?: string,
+    @Body('receiptUrl') receiptUrl?: string,
+    @GetUser() actor?: { id: string },
+  ) {
+    return this.adminUsersService.updateAdminSettlementStatus(
+      id,
+      { status, notes, paymentMethod, transactionId, receiptUrl },
+      actor,
+    );
+  }
+
   // --- OCORRÊNCIAS ---
   @Get('occurrences')
   @ApiOperation({ summary: 'Listar todas as ocorrências operacionais' })
   async getOccurrences(
     @Query('status') status?: string,
     @Query('type') type?: string,
+    @Query('driverId') driverId?: string,
+    @Query('tripId') tripId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
   ) {
-    return this.adminUsersService.listAllOccurrences({ status, type });
+    return this.adminUsersService.listAllOccurrences({ status, type, driverId, tripId, startDate, endDate, search });
   }
 
   @Get('occurrences/:id')
@@ -218,9 +253,10 @@ export class AdminDashboardController {
   async updateOccurrenceStatus(
     @Param('id') id: string,
     @Body('status') status: string,
-    @GetUser() actor: { id: string },
+    @Body('resolutionNotes') resolutionNotes?: string,
+    @GetUser() actor?: { id: string },
   ) {
-    return this.adminUsersService.updateOccurrenceStatus(id, status, actor);
+    return this.adminUsersService.updateOccurrenceStatus(id, status, resolutionNotes, actor);
   }
 
   // --- RASTREAMENTO & TELEMETRIA ---
@@ -233,8 +269,22 @@ export class AdminDashboardController {
   // --- LOGS & AUDITORIA ---
   @Get('erp-logs')
   @ApiOperation({ summary: 'Histórico de eventos de integração ERP' })
-  async getErpLogs(@Query('limit') limit?: number) {
-    return this.adminUsersService.listErpLogs(limit ? Number(limit) : 50);
+  async getErpLogs(
+    @Query('direction') direction?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminUsersService.listErpLogs({
+      direction,
+      status,
+      search,
+      startDate,
+      endDate,
+      limit: limit ? Number(limit) : 50,
+    });
   }
 
   @Get('audit-logs')
@@ -243,8 +293,24 @@ export class AdminDashboardController {
     @Query('limit') limit?: number,
     @Query('userId') userId?: string,
     @Query('action') action?: string,
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.adminUsersService.listAuditLogs(limit ? Number(limit) : 100, { userId, action });
+    return this.adminUsersService.listAuditLogs(limit ? Number(limit) : 100, {
+      userId,
+      action,
+      search,
+      startDate,
+      endDate,
+    });
+  }
+
+  // --- CONFIGURAÇÕES & HEALTH ---
+  @Get('config')
+  @ApiOperation({ summary: 'Parâmetros reais e configurações do sistema HK Connect' })
+  async getSystemConfig() {
+    return this.adminUsersService.getSystemConfig();
   }
 }
 

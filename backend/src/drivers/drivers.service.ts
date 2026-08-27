@@ -54,4 +54,61 @@ export class DriversService {
       vehicle: assignment.vehicle,
     };
   }
+
+  async updateLocation(driverId: string, data: {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    accuracy?: number;
+    heading?: number;
+    tripId?: string;
+    capturedAt?: string;
+  }) {
+    if (!driverId) {
+      throw new NotFoundException('Motorista não identificado na sessão');
+    }
+
+    const capturedDate = data.capturedAt ? new Date(data.capturedAt) : new Date();
+
+    // Inserir no histórico de telemetria
+    const location = await this.prisma.driverLocation.create({
+      data: {
+        driverId,
+        tripId: data.tripId || null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        speed: data.speed ?? null,
+        accuracy: data.accuracy ?? null,
+        heading: data.heading ?? null,
+        capturedAt: capturedDate,
+      },
+    });
+
+    // Atualizar tabela de última posição do motorista
+    await this.prisma.driverLastLocation.upsert({
+      where: { driverId },
+      create: {
+        driverId,
+        tripId: data.tripId || null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        speed: data.speed ?? null,
+        accuracy: data.accuracy ?? null,
+        heading: data.heading ?? null,
+        capturedAt: capturedDate,
+      },
+      update: {
+        tripId: data.tripId || null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        speed: data.speed ?? null,
+        accuracy: data.accuracy ?? null,
+        heading: data.heading ?? null,
+        capturedAt: capturedDate,
+        updatedAt: new Date(),
+      },
+    });
+
+    return { success: true, locationId: location.id, timestamp: capturedDate.toISOString() };
+  }
 }

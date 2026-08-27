@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DriversService } from './drivers.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -21,5 +21,22 @@ export class DriversController {
   @ApiOperation({ summary: 'Retorna o veículo atualmente vinculado ao motorista' })
   async getMyCurrentVehicle(@GetUser('driverId') driverId: string) {
     return this.driversService.getMyCurrentVehicle(driverId);
+  }
+
+  @Post('location')
+  @ApiOperation({ summary: 'Envia atualização de telemetria e coordenadas GPS do motorista' })
+  async updateLocation(
+    @GetUser('driverId') driverId: string,
+    @Body() body: {
+      latitude: number;
+      longitude: number;
+      speed?: number;
+      accuracy?: number;
+      heading?: number;
+      tripId?: string;
+      capturedAt?: string;
+    },
+  ) {
+    return this.driversService.updateLocation(driverId, body);
   }
 }
