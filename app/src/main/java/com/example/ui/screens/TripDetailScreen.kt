@@ -81,6 +81,8 @@ fun TripDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
                         .padding(16.dp)
                 ) {
                     when (trip.status) {

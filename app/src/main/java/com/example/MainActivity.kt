@@ -297,6 +297,7 @@ fun HKConnectApp() {
             composable("send_toll") {
                 SendTollScreen(
                     tollsList = tolls,
+                    onBackClick = { navController.popBackStack() },
                     onSubmitToll = { value, date, notes ->
                         viewModel.submitToll(value, date, notes) { }
                     }

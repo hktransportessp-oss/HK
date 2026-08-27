@@ -110,6 +110,7 @@ fun TripsScreen(
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredTrips, key = { it.id }) { trip ->

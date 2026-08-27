@@ -6,7 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -93,6 +95,7 @@ fun FinanceScreen(
             "Historico" -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(fechamentosList, key = { it.period }) { fechamento ->
@@ -163,6 +166,7 @@ fun FinanceScreen(
             "Pagamentos" -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     item {
@@ -269,7 +273,12 @@ private fun FechamentoDetailView(
     onResolveDivergence: (period: String) -> Unit,
     onNavigateToSendRomaneio: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         // Divergence Card if exists
         if (fechamento.hasDivergence) {
             Card(
@@ -387,6 +396,8 @@ private fun FechamentoDetailView(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 

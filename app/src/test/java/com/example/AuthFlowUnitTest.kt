@@ -11,6 +11,8 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import retrofit2.Call
 import retrofit2.Response
 
@@ -63,6 +65,7 @@ class FakeAuthApiService(
     override suspend fun getProfile(): Response<AuthResponse> = throw NotImplementedError()
 }
 
+@RunWith(RobolectricTestRunner::class)
 class AuthFlowUnitTest {
 
     @Test
@@ -111,5 +114,106 @@ class AuthFlowUnitTest {
 
         assertFalse(response.isSuccessful)
         assertEquals(500, response.code())
+    }
+
+    @Test
+    fun testBaseUrlIsRailwayAndNotLegacyDomain() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val tokenManager = com.example.data.remote.TokenManager.getInstance(context)
+        
+        val baseUrl = tokenManager.getServerUrl()
+        assertEquals("https://hk-production-4658.up.railway.app/", baseUrl)
+        assertFalse("Base URL must NOT contain api.hkconnect.com.br", baseUrl.contains("api.hkconnect.com.br"))
+        
+        val fullLoginEndpoint = "${baseUrl.removeSuffix("/")}/api/v1/auth/login"
+        assertEquals("https://hk-production-4658.up.railway.app/api/v1/auth/login", fullLoginEndpoint)
+    }
+
+    @Test
+    fun testLegacyBaseUrlIsAutomaticallyMigrated() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val tokenManager = com.example.data.remote.TokenManager.getInstance(context)
+        
+        // Simulate legacy setting
+        tokenManager.setServerUrl("https://api.hkconnect.com.br/")
+        
+        // When reading getServerUrl, it should automatically detect and migrate
+        val resolvedUrl = tokenManager.getServerUrl()
+        assertEquals("https://hk-production-4658.up.railway.app/", resolvedUrl)
+    }
+
+    @Test
+    fun testRealWorldJsonDeserializationWithNullDriverCpfAndNullVehicle() {
+        val moshi = com.squareup.moshi.Moshi.Builder()
+            .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+            .build()
+        val adapter = moshi.adapter(AuthResponse::class.java)
+
+        // Real backend payload when driver.cpf is null or omitted and vehicle is null
+        val json = """
+            {
+              "access_token": "jwt_access_abc123",
+              "refresh_token": "jwt_refresh_xyz789",
+              "token_type": "Bearer",
+              "expires_in": 900,
+              "user": {
+                "id": "usr-999",
+                "name": "Marcos Silva",
+                "cpf": "12345678901",
+                "phone": null,
+                "role": "DRIVER"
+              },
+              "driver": {
+                "id": "drv-888",
+                "user_id": "usr-999",
+                "cpf": null,
+                "cnh": null,
+                "cnh_category": null,
+                "rntrc": null,
+                "status": "ATIVO"
+              },
+              "vehicle": null
+            }
+        """.trimIndent()
+
+        val parsed = adapter.fromJson(json)
+        assertNotNull(parsed)
+        assertEquals("jwt_access_abc123", parsed?.accessToken)
+        assertEquals("Marcos Silva", parsed?.user?.name)
+        assertEquals("12345678901", parsed?.user?.cpf)
+        assertNull(parsed?.user?.phone)
+        assertNotNull(parsed?.driver)
+        assertNull(parsed?.driver?.cpf)
+        assertNull(parsed?.driver?.cnh)
+        assertEquals("ATIVO", parsed?.driver?.status)
+        assertNull(parsed?.vehicle)
+    }
+
+    @Test
+    fun testRealWorldJsonDeserializationWithCompletelyNullDriverAndVehicle() {
+        val moshi = com.squareup.moshi.Moshi.Builder()
+            .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+            .build()
+        val adapter = moshi.adapter(AuthResponse::class.java)
+
+        val json = """
+            {
+              "access_token": "jwt_access_abc123",
+              "refresh_token": "jwt_refresh_xyz789",
+              "user": {
+                "id": "usr-999",
+                "name": "Admin Usuario",
+                "cpf": "98765432100"
+              },
+              "driver": null,
+              "vehicle": null
+            }
+        """.trimIndent()
+
+        val parsed = adapter.fromJson(json)
+        assertNotNull(parsed)
+        assertEquals("98765432100", parsed?.user?.cpf)
+        assertNull(parsed?.driver)
+        assertNull(parsed?.vehicle)
     }
 }

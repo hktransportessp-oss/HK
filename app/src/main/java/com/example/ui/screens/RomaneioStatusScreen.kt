@@ -33,6 +33,8 @@ fun RomaneioStatusScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
@@ -146,6 +148,6 @@ fun RomaneioStatusScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(36.dp))
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Send
@@ -27,6 +28,7 @@ import com.example.ui.theme.*
 @Composable
 fun SendTollScreen(
     tollsList: List<TollReceiptEntity>,
+    onBackClick: (() -> Unit)? = null,
     onSubmitToll: (value: String, date: String, notes: String) -> Unit
 ) {
     var tollValue by remember { mutableStateOf("") }
@@ -36,9 +38,38 @@ fun SendTollScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        if (onBackClick != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.testTag("back_button_toll")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = PrimaryNavy
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Pedágios",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = PrimaryNavy,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
         Text(
             text = "Reembolso de Pedágio",
             style = MaterialTheme.typography.headlineMedium,

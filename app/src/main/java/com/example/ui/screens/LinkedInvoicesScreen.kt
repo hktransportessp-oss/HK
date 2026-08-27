@@ -39,6 +39,7 @@ fun LinkedInvoicesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .padding(16.dp)
     ) {
         // Back Header
@@ -111,6 +112,7 @@ fun LinkedInvoicesScreen(
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredInvoices, key = { it.number }) { invoice ->

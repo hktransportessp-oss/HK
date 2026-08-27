@@ -18,7 +18,7 @@ class TokenManager(context: Context) {
         private const val KEY_TRUCK_MODEL = "truck_model"
         private const val KEY_TRUCK_PLATE = "truck_plate"
         private const val KEY_SERVER_URL = "server_base_url"
-        private const val DEFAULT_SERVER_URL = "https://api.hkconnect.com.br/"
+        private const val DEFAULT_SERVER_URL = "https://hk-production-4658.up.railway.app/"
 
         @Volatile
         private var instance: TokenManager? = null
@@ -71,7 +71,15 @@ class TokenManager(context: Context) {
 
     fun getTruckPlate(): String = prefs.getString(KEY_TRUCK_PLATE, "") ?: ""
 
-    fun getServerUrl(): String = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+    fun getServerUrl(): String {
+        val stored = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+        return if (stored.contains("api.hkconnect.com.br") || stored.isBlank()) {
+            setServerUrl(DEFAULT_SERVER_URL)
+            DEFAULT_SERVER_URL
+        } else {
+            stored
+        }
+    }
 
     fun setServerUrl(url: String) {
         val cleanUrl = if (url.endsWith("/")) url else "$url/"

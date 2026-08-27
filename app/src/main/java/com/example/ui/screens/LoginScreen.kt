@@ -6,10 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -37,7 +39,7 @@ import com.example.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    currentServerUrl: String = "https://api.hkconnect.com.br/",
+    currentServerUrl: String = "https://hk-production-4658.up.railway.app/",
     onUpdateServerUrl: (String) -> Unit = {},
     onLogin: (cpf: String, password: String, remember: Boolean, onResult: (Boolean, String?) -> Unit) -> Unit
 ) {
@@ -85,6 +87,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(SurfaceBackground)
+            .imePadding()
             .systemBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
@@ -98,6 +101,7 @@ fun LoginScreen(
         ) {
             Column(
                 modifier = Modifier
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp)
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -388,7 +392,7 @@ fun LoginScreen(
                         value = editedServerUrl,
                         onValueChange = { editedServerUrl = it },
                         singleLine = true,
-                        placeholder = { Text("https://api.hkconnect.com.br/") },
+                        placeholder = { Text("https://hk-production-4658.up.railway.app/") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

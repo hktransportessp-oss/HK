@@ -39,6 +39,8 @@ fun SendRomaneioScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
@@ -305,6 +307,6 @@ fun SendRomaneioScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(36.dp))
     }
 }

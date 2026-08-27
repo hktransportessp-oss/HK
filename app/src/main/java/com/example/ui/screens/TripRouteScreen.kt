@@ -152,7 +152,10 @@ fun TripRouteScreen(
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
+                contentPadding = PaddingValues(bottom = 32.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
             ) {
                 items(routeData.stops, key = { it.deliveryId }) { stop ->
                     RouteStopItemCard(

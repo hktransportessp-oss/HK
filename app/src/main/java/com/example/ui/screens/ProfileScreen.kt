@@ -160,7 +160,9 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.LocalShipping,
                     title = "Dados do Veículo",
-                    subtitle = if (userProfile?.truckPlate?.isNotBlank() == true) "${userProfile.truckPlate} - ${userProfile.truckModel}" else "Não cadastrado",
+                    subtitle = if (userProfile?.truckPlate?.isNotBlank() == true) {
+                        "${userProfile.truckPlate}${if (userProfile.truckModel.isNotBlank()) " - ${userProfile.truckModel}" else ""}"
+                    } else "Nenhum veículo vinculado",
                     onClick = { }
                 )
                 HorizontalDivider(color = SurfaceVariant)
@@ -195,7 +197,7 @@ fun ProfileScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(36.dp))
     }
 }
 

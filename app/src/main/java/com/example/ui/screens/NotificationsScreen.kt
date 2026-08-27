@@ -30,6 +30,7 @@ fun NotificationsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .padding(16.dp)
     ) {
         // Back Header
@@ -74,6 +75,7 @@ fun NotificationsScreen(
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(notificationsList, key = { it.id }) { notif ->

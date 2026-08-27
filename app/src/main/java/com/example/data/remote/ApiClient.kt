@@ -42,6 +42,7 @@ class ApiClient private constructor(context: Context) {
     private fun buildRetrofit(): Retrofit {
         val baseUrl = tokenManager.getServerUrl()
         val formattedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        android.util.Log.d("HK_CONNECT_AUTH", "[NETWORK] BASE_URL = $formattedUrl")
         return Retrofit.Builder()
             .baseUrl(formattedUrl)
             .client(okHttpClient)
