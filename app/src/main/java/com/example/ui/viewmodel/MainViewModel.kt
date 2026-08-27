@@ -12,20 +12,40 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-sealed class Screen {
-    object Login : Screen()
-    object Home : Screen()
-    object Trips : Screen()
-    data class TripDetail(val tripId: String) : Screen()
-    data class LinkedInvoices(val tripId: String) : Screen()
-    object SendRomaneio : Screen()
-    data class RomaneioStatus(val romaneioId: String) : Screen()
-    object SendToll : Screen()
-    object FechamentosList : Screen()
-    data class FechamentoDetail(val period: String) : Screen()
-    object PaymentsHistory : Screen()
-    object Notifications : Screen()
-    object Profile : Screen()
+sealed class Screen(val route: String) {
+    object Login : Screen("login")
+    object Home : Screen("home")
+    object Trips : Screen("trips")
+    data class TripDetail(val tripId: String = "") : Screen("trip_detail/$tripId") {
+        companion object {
+            const val ROUTE = "trip_detail/{tripId}"
+            fun createRoute(tripId: String) = "trip_detail/$tripId"
+        }
+    }
+    data class LinkedInvoices(val tripId: String = "") : Screen("linked_invoices/$tripId") {
+        companion object {
+            const val ROUTE = "linked_invoices/{tripId}"
+            fun createRoute(tripId: String) = "linked_invoices/$tripId"
+        }
+    }
+    data class ScanInvoice(val tripId: String = "") : Screen("scan_invoice/$tripId") {
+        companion object {
+            const val ROUTE = "scan_invoice/{tripId}"
+            fun createRoute(tripId: String) = "scan_invoice/$tripId"
+        }
+    }
+    data class TripRoute(val tripId: String = "") : Screen("trip_route/$tripId") {
+        companion object {
+            const val ROUTE = "trip_route/{tripId}"
+            fun createRoute(tripId: String) = "trip_route/$tripId"
+        }
+    }
+    object SendRomaneio : Screen("send_romaneio")
+    object RomaneioStatus : Screen("romaneio_status")
+    object SendToll : Screen("send_toll")
+    object Finance : Screen("finance")
+    object Notifications : Screen("notifications")
+    object Profile : Screen("profile")
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,7 +85,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "home" -> _currentScreen.value = Screen.Home
             "trips" -> _currentScreen.value = Screen.Trips
             "send" -> _currentScreen.value = Screen.SendRomaneio
-            "finance" -> _currentScreen.value = Screen.FechamentosList
+            "finance" -> _currentScreen.value = Screen.Finance
             "profile" -> _currentScreen.value = Screen.Profile
         }
     }

@@ -25,6 +25,7 @@ import com.example.ui.components.HKTopAppBar
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
+import com.example.ui.viewmodel.Screen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,9 +60,15 @@ fun HKConnectApp() {
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: "login"
+    val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Login.route
 
-    val mainTabRoutes = listOf("home", "trips", "send_romaneio", "finance", "profile")
+    val mainTabRoutes = listOf(
+        Screen.Home.route,
+        Screen.Trips.route,
+        Screen.SendRomaneio.route,
+        Screen.Finance.route,
+        Screen.Profile.route
+    )
     val showTopBar = isLoggedIn && currentRoute in mainTabRoutes
     val showBottomBar = isLoggedIn && currentRoute in mainTabRoutes
 
@@ -77,19 +84,31 @@ fun HKConnectApp() {
                     truckInfo = truckInfo,
                     avatarUrl = userProfile?.avatarUrl ?: "",
                     unreadNotifications = notifications.isNotEmpty(),
-                    onAvatarClick = { navController.navigate("profile") },
-                    onNotificationClick = { navController.navigate("notifications") }
+                    onAvatarClick = {
+                        if (currentRoute != Screen.Profile.route) {
+                            navController.navigate(Screen.Profile.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    },
+                    onNotificationClick = {
+                        if (currentRoute != Screen.Notifications.route) {
+                            navController.navigate(Screen.Notifications.route)
+                        }
+                    }
                 )
             }
         },
         bottomBar = {
             if (showBottomBar) {
                 val activeTab = when (currentRoute) {
-                    "home" -> "home"
-                    "trips" -> "trips"
-                    "send_romaneio" -> "send"
-                    "finance" -> "finance"
-                    "profile" -> "profile"
+                    Screen.Home.route -> "home"
+                    Screen.Trips.route -> "trips"
+                    Screen.SendRomaneio.route -> "send"
+                    Screen.Finance.route -> "finance"
+                    Screen.Profile.route -> "profile"
                     else -> "home"
                 }
 
@@ -97,17 +116,32 @@ fun HKConnectApp() {
                     activeTab = activeTab,
                     onTabSelected = { tab ->
                         val targetRoute = when (tab) {
-                            "home" -> "home"
-                            "trips" -> "trips"
-                            "send" -> "send_romaneio"
-                            "finance" -> "finance"
-                            "profile" -> "profile"
-                            else -> "home"
+                            "home" -> Screen.Home.route
+                            "trips" -> Screen.Trips.route
+                            "send" -> Screen.SendRomaneio.route
+                            "finance" -> Screen.Finance.route
+                            "profile" -> Screen.Profile.route
+                            else -> Screen.Home.route
                         }
-                        navController.navigate(targetRoute) {
-                            popUpTo("home") { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+
+                        if (currentRoute != targetRoute) {
+                            if (targetRoute == Screen.Home.route) {
+                                val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                                if (!popped) {
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(Screen.Home.route) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                            } else {
+                                navController.navigate(targetRoute) {
+                                    popUpTo(Screen.Home.route) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
                         }
                     }
                 )
@@ -117,10 +151,10 @@ fun HKConnectApp() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = if (isLoggedIn) "home" else "login",
+            startDestination = if (isLoggedIn) Screen.Home.route else Screen.Login.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable("login") {
+            composable(Screen.Login.route) {
                 LoginScreen(
                     currentServerUrl = viewModel.getServerUrl(),
                     onUpdateServerUrl = { newUrl ->
@@ -130,8 +164,8 @@ fun HKConnectApp() {
                         viewModel.login(phone, password, remember) { success, errorMsg ->
                             onResult(success, errorMsg)
                             if (success) {
-                                navController.navigate("home") {
-                                    popUpTo("login") { inclusive = true }
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
                                 }
                             }
                         }
@@ -139,31 +173,55 @@ fun HKConnectApp() {
                 )
             }
 
-            composable("home") {
+            composable(Screen.Home.route) {
                 HomeScreen(
                     driverName = driverName,
                     truckInfo = truckInfo,
                     currentFechamento = fechamentos.firstOrNull(),
-                    onNavigateToSendRomaneio = { navController.navigate("send_romaneio") },
-                    onNavigateToTrips = { navController.navigate("trips") },
-                    onNavigateToTolls = { navController.navigate("send_toll") },
-                    onNavigateToFechamentos = { navController.navigate("finance") },
-                    onNavigateToPayments = { navController.navigate("finance") }
+                    onNavigateToSendRomaneio = {
+                        navController.navigate(Screen.SendRomaneio.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToTrips = {
+                        navController.navigate(Screen.Trips.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToTolls = { navController.navigate(Screen.SendToll.route) },
+                    onNavigateToFechamentos = {
+                        navController.navigate(Screen.Finance.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToPayments = {
+                        navController.navigate(Screen.Finance.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 )
             }
 
-            composable("trips") {
+            composable(Screen.Trips.route) {
                 TripsScreen(
                     tripsList = trips,
                     onTripSelected = { tripId ->
                         selectedTripId = tripId
-                        navController.navigate("trip_detail/$tripId")
+                        navController.navigate(Screen.TripDetail.createRoute(tripId))
                     }
                 )
             }
 
             composable(
-                route = "trip_detail/{tripId}",
+                route = Screen.TripDetail.ROUTE,
                 arguments = listOf(navArgument("tripId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val tripId = backStackEntry.arguments?.getString("tripId") ?: selectedTripId ?: ""
@@ -187,22 +245,22 @@ fun HKConnectApp() {
                     },
                     onBackClick = { navController.popBackStack() },
                     onViewInvoicesClick = {
-                        navController.navigate("linked_invoices/$tripId")
+                        navController.navigate(Screen.LinkedInvoices.createRoute(tripId))
                     },
                     onViewTollsClick = {
-                        navController.navigate("send_toll")
+                        navController.navigate(Screen.SendToll.route)
                     },
                     onScanNfeClick = {
-                        navController.navigate("scan_invoice/$tripId")
+                        navController.navigate(Screen.ScanInvoice.createRoute(tripId))
                     },
                     onViewRouteClick = {
-                        navController.navigate("trip_route/$tripId")
+                        navController.navigate(Screen.TripRoute.createRoute(tripId))
                     }
                 )
             }
 
             composable(
-                route = "scan_invoice/{tripId}",
+                route = Screen.ScanInvoice.ROUTE,
                 arguments = listOf(navArgument("tripId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val tripId = backStackEntry.arguments?.getString("tripId") ?: selectedTripId ?: ""
@@ -220,7 +278,7 @@ fun HKConnectApp() {
             }
 
             composable(
-                route = "trip_route/{tripId}",
+                route = Screen.TripRoute.ROUTE,
                 arguments = listOf(navArgument("tripId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val tripId = backStackEntry.arguments?.getString("tripId") ?: selectedTripId ?: ""
@@ -251,7 +309,7 @@ fun HKConnectApp() {
             }
 
             composable(
-                route = "linked_invoices/{tripId}",
+                route = Screen.LinkedInvoices.ROUTE,
                 arguments = listOf(navArgument("tripId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val tripId = backStackEntry.arguments?.getString("tripId") ?: selectedTripId ?: ""
@@ -267,34 +325,32 @@ fun HKConnectApp() {
                 )
             }
 
-            composable("send_romaneio") {
+            composable(Screen.SendRomaneio.route) {
                 SendRomaneioScreen(
                     driverName = driverName,
                     truckPlate = userProfile?.truckPlate ?: "",
                     onSubmitRomaneio = { notes, files ->
                         viewModel.submitRomaneio(notes, files) { romId ->
                             selectedRomaneioId = romId
-                            navController.navigate("romaneio_status")
+                            navController.navigate(Screen.RomaneioStatus.route)
                         }
                     }
                 )
             }
 
-            composable("romaneio_status") {
+            composable(Screen.RomaneioStatus.route) {
                 val romaneio = romaneios.firstOrNull { it.id == selectedRomaneioId } ?: romaneios.firstOrNull()
 
                 RomaneioStatusScreen(
                     romaneio = romaneio,
                     onBackClick = { navController.popBackStack() },
                     onGoHomeClick = {
-                        navController.navigate("home") {
-                            popUpTo("home") { inclusive = true }
-                        }
+                        navController.popBackStack(Screen.Home.route, inclusive = false)
                     }
                 )
             }
 
-            composable("send_toll") {
+            composable(Screen.SendToll.route) {
                 SendTollScreen(
                     tollsList = tolls,
                     onBackClick = { navController.popBackStack() },
@@ -304,36 +360,40 @@ fun HKConnectApp() {
                 )
             }
 
-            composable("finance") {
+            composable(Screen.Finance.route) {
                 FinanceScreen(
                     fechamentosList = fechamentos,
                     onResolveDivergence = { period ->
                         viewModel.resolveDivergence(period)
                     },
                     onNavigateToSendRomaneio = {
-                        navController.navigate("send_romaneio")
+                        navController.navigate(Screen.SendRomaneio.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }
 
-            composable("notifications") {
+            composable(Screen.Notifications.route) {
                 NotificationsScreen(
                     notificationsList = notifications,
                     onBackClick = { navController.popBackStack() }
                 )
             }
 
-            composable("profile") {
+            composable(Screen.Profile.route) {
                 ProfileScreen(
                     userProfile = userProfile,
                     onLogoutClick = {
                         viewModel.logout()
-                        navController.navigate("login") {
+                        navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
                     onNavigateToSendToll = {
-                        navController.navigate("send_toll")
+                        navController.navigate(Screen.SendToll.route)
                     }
                 )
             }
