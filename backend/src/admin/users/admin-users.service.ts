@@ -1213,7 +1213,7 @@ export class AdminUsersService {
       throw new BadRequestException('O local de origem da rota é obrigatório.');
     }
 
-    const rawStops = Array.isArray(dto.stops) ? dto.stops : [];
+    const rawStops = Array.isArray(dto.stops) ? dto.stops : (Array.isArray(dto.deliveries) ? dto.deliveries : []);
     const isAssignAction = dto.action === 'ASSIGN' || dto.status === 'ASSIGNED';
 
     if (isAssignAction) {
@@ -1272,7 +1272,8 @@ export class AdminUsersService {
         const neighborhood = stop.neighborhood?.trim() || null;
         const city = stop.city?.trim() || 'São Paulo';
         const state = stop.state?.trim() || 'SP';
-        const postalCode = stop.postalCode?.trim() || null;
+        const postalCode = (stop.postalCode || stop.zipCode)?.trim() || null;
+        const phone = (stop.recipientPhone || stop.phone)?.trim() || null;
         const fullAddress = [address, numberAddress, neighborhood, city, state].filter(Boolean).join(', ');
 
         // TripStop
@@ -1306,15 +1307,15 @@ export class AdminUsersService {
             value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
             quantityExpected: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
             notes: stop.notes?.trim() || null,
-            observations: stop.phone ? `Contato: ${stop.phone}` : null,
+            observations: phone ? `Contato: ${phone}` : null,
           },
         });
 
         // Se informou dados de Nota Fiscal operacional
-        if (stop.invoiceNumber?.trim()) {
-          const invoiceNum = stop.invoiceNumber.trim();
-          const accessKey = stop.invoiceAccessKey?.trim() || 
-            `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.padStart(9, '0')}`;
+        if (stop.invoiceNumber?.trim() || stop.invoiceKey?.trim() || stop.invoiceAccessKey?.trim()) {
+          const invoiceNum = stop.invoiceNumber?.trim() || `NF-${sequence}`;
+          const accessKey = (stop.invoiceAccessKey || stop.invoiceKey)?.trim() || 
+            `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.replace(/\D/g, '').padStart(9, '0')}`;
 
           await tx.invoice.create({
             data: {
@@ -1399,7 +1400,7 @@ export class AdminUsersService {
     const origin = dto.origin !== undefined ? dto.origin.trim() : trip.origin;
     let destination = dto.destination !== undefined ? dto.destination.trim() : trip.destination;
 
-    const rawStops = Array.isArray(dto.stops) ? dto.stops : null;
+    const rawStops = Array.isArray(dto.stops) ? dto.stops : (Array.isArray(dto.deliveries) ? dto.deliveries : null);
     if (rawStops && rawStops.length > 0 && (!dto.destination || !dto.destination.trim())) {
       const lastStop = rawStops[rawStops.length - 1];
       destination = `${lastStop.recipient || 'Entrega'} - ${lastStop.city || 'Destino'}/${lastStop.state || 'SP'}`;
@@ -1434,7 +1435,8 @@ export class AdminUsersService {
           const neighborhood = stop.neighborhood?.trim() || null;
           const city = stop.city?.trim() || 'São Paulo';
           const state = stop.state?.trim() || 'SP';
-          const postalCode = stop.postalCode?.trim() || null;
+          const postalCode = (stop.postalCode || stop.zipCode)?.trim() || null;
+          const phone = (stop.recipientPhone || stop.phone)?.trim() || null;
           const fullAddress = [address, numberAddress, neighborhood, city, state].filter(Boolean).join(', ');
 
           await tx.tripStop.create({
@@ -1466,14 +1468,14 @@ export class AdminUsersService {
               value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
               quantityExpected: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
               notes: stop.notes?.trim() || null,
-              observations: stop.phone ? `Contato: ${stop.phone}` : null,
+              observations: phone ? `Contato: ${phone}` : null,
             },
           });
 
-          if (stop.invoiceNumber?.trim()) {
-            const invoiceNum = stop.invoiceNumber.trim();
-            const accessKey = stop.invoiceAccessKey?.trim() || 
-              `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.padStart(9, '0')}`;
+          if (stop.invoiceNumber?.trim() || stop.invoiceKey?.trim() || stop.invoiceAccessKey?.trim()) {
+            const invoiceNum = stop.invoiceNumber?.trim() || `NF-${sequence}`;
+            const accessKey = (stop.invoiceAccessKey || stop.invoiceKey)?.trim() || 
+              `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.replace(/\D/g, '').padStart(9, '0')}`;
 
             await tx.invoice.create({
               data: {
@@ -1616,9 +1618,16 @@ export class AdminUsersService {
 
   async reassignAdminTrip(
     id: string,
-    dto: { newDriverId: string; newVehicleId?: string; reason?: string },
+    dto: { newDriverId?: string; driverId?: string; newVehicleId?: string; vehicleId?: string; reason?: string },
     actor?: { id: string },
   ) {
+    const targetDriverId = dto.newDriverId || dto.driverId;
+    const targetVehicleId = dto.newVehicleId || dto.vehicleId;
+
+    if (!targetDriverId) {
+      throw new BadRequestException('ID do novo motorista é obrigatório.');
+    }
+
     const trip = await this.prisma.trip.findUnique({
       where: { id },
       include: { driver: { include: { user: true } } },
@@ -1630,7 +1639,7 @@ export class AdminUsersService {
     }
 
     const newDriver = await this.prisma.driver.findUnique({
-      where: { id: dto.newDriverId },
+      where: { id: targetDriverId },
       include: {
         user: true,
         assignments: { where: { isCurrent: true }, include: { vehicle: true }, take: 1 },
@@ -1641,7 +1650,7 @@ export class AdminUsersService {
       throw new BadRequestException('O novo motorista selecionado está bloqueado ou inativo.');
     }
 
-    let vehicleId = dto.newVehicleId;
+    let vehicleId = targetVehicleId;
     if (!vehicleId && newDriver.assignments && newDriver.assignments.length > 0) {
       vehicleId = newDriver.assignments[0].vehicleId;
     }
@@ -1661,7 +1670,7 @@ export class AdminUsersService {
     const updated = await this.prisma.trip.update({
       where: { id },
       data: {
-        driverId: dto.newDriverId,
+        driverId: targetDriverId,
         vehicleId,
         status: TripStatus.ASSIGNED,
         notes: trip.notes ? `${trip.notes}${noteEntry}` : noteEntry,
@@ -1679,7 +1688,7 @@ export class AdminUsersService {
         tripId: id,
         tripCode: trip.tripCode,
         oldDriverId: trip.driverId,
-        newDriverId: dto.newDriverId,
+        newDriverId: targetDriverId,
         vehicleId,
         reason,
       },

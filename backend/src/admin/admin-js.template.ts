@@ -1905,6 +1905,10 @@ export const ADMIN_JS_TEMPLATE = `
   // ==============================================
   // DETALHES COMPLETOS DA VIAGEM
   // ==============================================
+  function openTripDetails(tripId) {
+    return openTripDetailsModal(tripId);
+  }
+
   async function openTripDetailsModal(tripId) {
     try {
       const t = await apiFetch('/api/v1/admin/trips/' + tripId);
