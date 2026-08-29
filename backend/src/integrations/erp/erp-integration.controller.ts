@@ -30,6 +30,7 @@ import {
 } from './dto/adjustment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
+import { ErpInvoiceSyncDto } from './dto/invoice-payload.dto';
 
 @ApiTags('ERP Integrations')
 @ApiHeader({
@@ -188,7 +189,61 @@ export class ErpIntegrationController {
   }
 
   /**
-   * 7. POST /api/v1/integrations/erp/events
+   * 7. POST /api/v1/integrations/erp/invoices
+   */
+  @Post('invoices')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Recebe e sincroniza Notas Fiscais eletrônicas emitidas/importadas pelo ERP',
+    description: 'Importa NF-e individuais ou lotes diretamente do ERP para disponibilização no painel operacional HK Connect.',
+  })
+  @ApiResponse({ status: 200, description: 'Nota(s) Fiscal(is) sincronizada(s) com sucesso' })
+  async receiveInvoice(
+    @Body() dto: ErpInvoiceSyncDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
+  ) {
+    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
+    if (!key) {
+      throw new BadRequestException('idempotency-key é obrigatório no header HTTP ou no corpo da requisição');
+    }
+    return this.erpService.processInvoiceEvent(dto, key);
+  }
+
+  /**
+   * 8. POST /api/v1/integrations/erp/invoices/sync (ou /backfill)
+   */
+  @Post('invoices/sync')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sincronização em lote / Backfill de Notas Fiscais históricas do ERP',
+  })
+  @ApiResponse({ status: 200, description: 'Sincronização em lote processada' })
+  async syncInvoices(
+    @Body() dto: ErpInvoiceSyncDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
+  ) {
+    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
+    return this.erpService.syncInvoicesBackfill(dto, key);
+  }
+
+  @Post('invoices/backfill')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Backfill e reconciliação inicial de Notas Fiscais do ERP',
+  })
+  async backfillInvoices(
+    @Body() dto: ErpInvoiceSyncDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyHeader?: string,
+  ) {
+    const key = idempotencyHeader || xIdempotencyHeader || dto.idempotencyKey;
+    return this.erpService.syncInvoicesBackfill(dto, key);
+  }
+
+  /**
+   * 9. POST /api/v1/integrations/erp/events
    */
   @Post('events')
   @HttpCode(HttpStatus.OK)

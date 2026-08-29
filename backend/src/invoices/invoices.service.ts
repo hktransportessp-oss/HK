@@ -53,14 +53,15 @@ export class InvoicesService {
     // 2. Check duplicate scanning
     const existingInvoiceInDb = await this.prisma.invoice.findUnique({
       where: { accessKey: cleanKey },
+      include: { trip: true },
     });
 
     if (existingInvoiceInDb) {
       if (existingInvoiceInDb.tripId === tripId) {
         throw new BadRequestException('NF-e já adicionada à carga.');
-      } else {
+      } else if (existingInvoiceInDb.tripId && existingInvoiceInDb.trip && existingInvoiceInDb.trip.status !== 'CANCELLED') {
         throw new BadRequestException(
-          'NF-e pertence a outra viagem/operação e não pode ser vinculada a esta carga.',
+          `NF-e pertence à viagem "${existingInvoiceInDb.trip.tripCode}" e não pode ser vinculada a esta carga.`,
         );
       }
     }
@@ -134,38 +135,50 @@ export class InvoicesService {
       });
     }
 
-    // 5. Create invoice record in DB attached to trip and delivery
-    const createdInvoice = await this.prisma.invoice.create({
-      data: {
-        accessKey: cleanKey,
-        number: erpInvoice.number,
-        externalId: erpInvoice.externalId,
-        tripId,
-        deliveryId: delivery.id,
-        recipient: erpInvoice.recipient,
-        recipientDocument: erpInvoice.recipientDocument,
-        address: erpInvoice.address,
-        numberAddress: erpInvoice.numberAddress,
-        complement: erpInvoice.complement,
-        neighborhood: erpInvoice.neighborhood,
-        city: erpInvoice.city,
-        state: erpInvoice.state,
-        postalCode: erpInvoice.postalCode,
-        latitude: erpInvoice.latitude,
-        longitude: erpInvoice.longitude,
-        customerId: erpInvoice.customerId,
-        customerName: erpInvoice.customerName,
-        value: erpInvoice.value,
-        weight: erpInvoice.weight,
-        volumeCount: erpInvoice.volumeCount,
-        deliveryWindowStart: erpInvoice.deliveryWindowStart,
-        deliveryWindowEnd: erpInvoice.deliveryWindowEnd,
-        lunchBreakStart: erpInvoice.lunchBreakStart,
-        lunchBreakEnd: erpInvoice.lunchBreakEnd,
-        observations: erpInvoice.observations,
-        status: InvoiceStatus.IN_TRANSIT,
-      },
-    });
+    // 5. Create or update invoice record in DB attached to trip and delivery
+    let createdInvoice;
+    if (existingInvoiceInDb) {
+      createdInvoice = await this.prisma.invoice.update({
+        where: { id: existingInvoiceInDb.id },
+        data: {
+          tripId,
+          deliveryId: delivery.id,
+          status: InvoiceStatus.IN_TRANSIT,
+        },
+      });
+    } else {
+      createdInvoice = await this.prisma.invoice.create({
+        data: {
+          accessKey: cleanKey,
+          number: erpInvoice.number,
+          externalId: erpInvoice.externalId,
+          tripId,
+          deliveryId: delivery.id,
+          recipient: erpInvoice.recipient,
+          recipientDocument: erpInvoice.recipientDocument,
+          address: erpInvoice.address,
+          numberAddress: erpInvoice.numberAddress,
+          complement: erpInvoice.complement,
+          neighborhood: erpInvoice.neighborhood,
+          city: erpInvoice.city,
+          state: erpInvoice.state,
+          postalCode: erpInvoice.postalCode,
+          latitude: erpInvoice.latitude,
+          longitude: erpInvoice.longitude,
+          customerId: erpInvoice.customerId,
+          customerName: erpInvoice.customerName,
+          value: erpInvoice.value,
+          weight: erpInvoice.weight,
+          volumeCount: erpInvoice.volumeCount,
+          deliveryWindowStart: erpInvoice.deliveryWindowStart,
+          deliveryWindowEnd: erpInvoice.deliveryWindowEnd,
+          lunchBreakStart: erpInvoice.lunchBreakStart,
+          lunchBreakEnd: erpInvoice.lunchBreakEnd,
+          observations: erpInvoice.observations,
+          status: InvoiceStatus.IN_TRANSIT,
+        },
+      });
+    }
 
     return {
       message: 'NF-e bipada e vinculada à carga com sucesso.',

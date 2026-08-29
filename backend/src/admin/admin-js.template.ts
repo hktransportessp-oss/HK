@@ -11,6 +11,7 @@ export const ADMIN_JS_TEMPLATE = `
     trips: [],
     romaneios: [],
     invoices: [],
+    selectedInvoiceIds: new Set(),
     tolls: [],
     occurrences: [],
     settlements: [],
@@ -297,7 +298,7 @@ export const ADMIN_JS_TEMPLATE = `
   function navigate(view) {
     STATE.currentView = view;
 
-    ['dashboard', 'trips', 'romaneios', 'tolls', 'occurrences', 'tracking', 'drivers', 'vehicles', 'config'].forEach(v => {
+    ['dashboard', 'invoices', 'trips', 'romaneios', 'tolls', 'occurrences', 'tracking', 'drivers', 'vehicles', 'config'].forEach(v => {
       const navBtn = document.getElementById('nav-' + v);
       const viewSec = document.getElementById('view-' + v);
       if (navBtn) {
@@ -314,6 +315,7 @@ export const ADMIN_JS_TEMPLATE = `
     if (pageTitle) {
       const titles = {
         dashboard: 'Dashboard Operacional',
+        invoices: 'Notas Fiscais (ERP HK Transportes)',
         trips: 'Viagens / Rotas',
         romaneios: 'Romaneios',
         tolls: 'Pedágios Operacionais',
@@ -329,6 +331,7 @@ export const ADMIN_JS_TEMPLATE = `
     renderIcons();
 
     if (view === 'dashboard') loadDashboard();
+    else if (view === 'invoices') loadInvoices();
     else if (view === 'trips') loadTrips();
     else if (view === 'romaneios') loadRomaneios();
     else if (view === 'tolls') loadTolls();
@@ -2324,69 +2327,178 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // 6. NOTAS FISCAIS CONTROLLER
+  // 6. NOTAS FISCAIS CONTROLLER (ERP HK TRANSPORTES)
   // ==============================================
   async function loadInvoices() {
     const tbody = document.getElementById('invoices-table-body');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:2rem; color:var(--text-muted);">Carregando notas fiscais...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2rem; color:var(--text-muted);">Carregando Notas Fiscais sincronizadas do ERP...</td></tr>';
 
     try {
-      const search = document.getElementById('invoice-search-input')?.value.trim() || '';
-      const status = document.getElementById('invoice-status-filter')?.value || '';
-      const startDate = document.getElementById('invoice-start-date')?.value || '';
-      const endDate = document.getElementById('invoice-end-date')?.value || '';
-
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (status) params.append('status', status);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-
-      const url = '/api/v1/admin/invoices' + (params.toString() ? '?' + params.toString() : '');
-      const invoices = await apiFetch(url);
+      const invoices = await apiFetch('/api/v1/admin/invoices');
       STATE.invoices = invoices || [];
+
+      // Update Top Stats
+      const total = STATE.invoices.length;
+      const available = STATE.invoices.filter(i => i.operationalStatus === 'AVAILABLE' || (!i.tripId && i.fiscalStatus !== 'CANCELLED')).length;
+      const inTransit = STATE.invoices.filter(i => i.operationalStatus === 'IN_TRANSIT' || (i.trip && i.trip.status !== 'PENDING' && i.trip.status !== 'CANCELLED')).length;
+      const delivered = STATE.invoices.filter(i => i.operationalStatus === 'DELIVERED' || i.status === 'DELIVERED').length;
+
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+      };
+      setVal('stat-total-invoices', total);
+      setVal('stat-available-invoices', available);
+      setVal('stat-in-transit-invoices', inTransit);
+      setVal('stat-delivered-invoices', delivered);
+
       renderInvoicesTable();
     } catch (err) {
-      showToast('Erro ao carregar notas fiscais: ' + err.message, 'error');
-      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:2rem; color:var(--rose-base);">Falha ao carregar notas fiscais</td></tr>';
+      showToast('Erro ao carregar Notas Fiscais: ' + err.message, 'error');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2rem; color:var(--rose-base);">Falha ao carregar Notas Fiscais do ERP</td></tr>';
     }
+  }
+
+  function getFilteredInvoices() {
+    const search = (document.getElementById('invoice-search-input')?.value || '').toLowerCase().trim();
+    const opFilter = document.getElementById('invoice-operational-filter')?.value || 'AVAILABLE';
+    const fiscalFilter = document.getElementById('invoice-fiscal-filter')?.value || '';
+    const cityFilter = (document.getElementById('invoice-city-filter')?.value || '').toLowerCase().trim();
+
+    return (STATE.invoices || []).filter(inv => {
+      // 1. Search text
+      if (search) {
+        const num = (inv.number || '').toLowerCase();
+        const key = (inv.accessKey || '').toLowerCase();
+        const rec = (inv.recipient || inv.delivery?.recipient || '').toLowerCase();
+        const addr = (inv.address || inv.delivery?.address || '').toLowerCase();
+        const city = (inv.city || inv.delivery?.city || '').toLowerCase();
+        if (!num.includes(search) && !key.includes(search) && !rec.includes(search) && !addr.includes(search) && !city.includes(search)) {
+          return false;
+        }
+      }
+
+      // 2. Operational filter
+      const opStatus = inv.operationalStatus || (inv.tripId ? 'IN_TRANSIT' : 'AVAILABLE');
+      if (opFilter === 'AVAILABLE') {
+        if (opStatus !== 'AVAILABLE') return false;
+      } else if (opFilter === 'ROUTED_DRAFT') {
+        if (opStatus !== 'ROUTED_DRAFT') return false;
+      } else if (opFilter === 'IN_TRANSIT') {
+        if (opStatus !== 'IN_TRANSIT') return false;
+      } else if (opFilter === 'DELIVERED') {
+        if (opStatus !== 'DELIVERED' && inv.status !== 'DELIVERED') return false;
+      } else if (opFilter === 'RETURNED') {
+        if (opStatus !== 'RETURNED' && inv.status !== 'RETURNED') return false;
+      } else if (opFilter === 'CANCELLED') {
+        if (opStatus !== 'CANCELLED' && inv.fiscalStatus !== 'CANCELLED') return false;
+      }
+
+      // 3. Fiscal status filter
+      if (fiscalFilter && inv.fiscalStatus !== fiscalFilter) {
+        return false;
+      }
+
+      // 4. City filter
+      if (cityFilter) {
+        const city = (inv.city || inv.delivery?.city || '').toLowerCase();
+        if (!city.includes(cityFilter)) return false;
+      }
+
+      return true;
+    });
   }
 
   function renderInvoicesTable() {
     const tbody = document.getElementById('invoices-table-body');
     if (!tbody) return;
 
-    if (!STATE.invoices || STATE.invoices.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:2.5rem; color:var(--text-muted);">Nenhuma nota fiscal encontrada com os filtros aplicados.</td></tr>';
+    const filtered = getFilteredInvoices();
+    updateSelectedInvoicesCounter();
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2.5rem; color:var(--text-muted);">Nenhuma Nota Fiscal encontrada com os filtros selecionados.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = STATE.invoices.map(inv => {
+    tbody.innerHTML = filtered.map(inv => {
+      const isSelected = STATE.selectedInvoiceIds.has(inv.id);
+      const isAvailable = inv.isAvailableForRouting || inv.operationalStatus === 'AVAILABLE' || (!inv.tripId && inv.fiscalStatus !== 'CANCELLED');
       const tripCode = inv.trip?.tripCode || '-';
-      const driverName = inv.trip?.driver?.user?.name || '-';
-      const recipient = inv.recipient || inv.delivery?.recipient || '-';
-      const location = (inv.delivery?.city && inv.delivery?.state) ? (inv.delivery.city + '/' + inv.delivery.state) : '-';
-      const accessKeyShort = inv.accessKey ? (inv.accessKey.slice(0, 6) + '...' + inv.accessKey.slice(-6)) : '-';
-      const formattedValue = inv.totalValue ? formatCurrency(inv.totalValue) : (inv.value ? formatCurrency(inv.value) : 'R$ 0,00');
+      const tripId = inv.trip?.id || null;
+      const recipient = inv.recipient || inv.delivery?.recipient || 'Cliente';
+      const doc = inv.recipientDocument || '-';
+      const address = (inv.address || inv.delivery?.address || '-') + (inv.numberAddress ? ', ' + inv.numberAddress : '');
+      const cityUf = (inv.city || inv.delivery?.city || 'São Paulo') + '/' + (inv.state || inv.delivery?.state || 'SP');
+      const accessKey = inv.accessKey || '';
+      const accessKeyShort = accessKey.length >= 16 ? (accessKey.slice(0, 6) + '...' + accessKey.slice(-6)) : (accessKey || '-');
+      const formattedValue = formatCurrency(inv.value || inv.totalValue || 0);
+      const volumes = inv.volumeCount || inv.volumes || 1;
+      const weight = inv.weight || inv.weightKg || 0;
 
-      let statusBadge = '<span class="badge badge-muted">' + inv.status + '</span>';
-      if (inv.status === 'DELIVERED') statusBadge = '<span class="badge badge-emerald">ENTREGUE</span>';
-      else if (inv.status === 'IN_TRANSIT') statusBadge = '<span class="badge badge-cyan">EM TRÂNSITO</span>';
-      else if (inv.status === 'RETURNED' || inv.status === 'CANCELLED') statusBadge = '<span class="badge badge-rose">' + inv.status + '</span>';
+      // Status Badge
+      let statusBadge = '<span class="badge badge-success">DISPONÍVEL P/ ROTA</span>';
+      if (inv.fiscalStatus === 'CANCELLED') {
+        statusBadge = '<span class="badge badge-rose">CANCELADA NO ERP</span>';
+      } else if (inv.status === 'DELIVERED') {
+        statusBadge = '<span class="badge badge-purple">ENTREGUE (POD)</span>';
+      } else if (inv.status === 'RETURNED') {
+        statusBadge = '<span class="badge badge-rose">DEVOLVIDA</span>';
+      } else if (inv.trip) {
+        if (inv.trip.status === 'PENDING') {
+          statusBadge = '<span class="badge badge-amber">RASCUNHO DE ROTA</span>';
+        } else {
+          statusBadge = '<span class="badge badge-cyan">EM TRÂNSITO</span>';
+        }
+      }
+
+      const checkboxHtml = isAvailable
+        ? '<input type="checkbox" onchange="toggleInvoiceSelection(\\'' + inv.id + '\\', this.checked)" ' + (isSelected ? 'checked' : '') + ' style="cursor:pointer; width:16px; height:16px;">'
+        : '<input type="checkbox" disabled title="NF já vinculada a viagem ou cancelada" style="opacity:0.3; cursor:not-allowed;">';
+
+      const tripLinkHtml = tripId
+        ? '<button onclick="openTripDetailsModal(\\'' + tripId + '\\')" class="btn btn-secondary btn-xs font-mono" style="color:var(--brand-light); font-weight:700;"><span data-lucide="navigation" class="icon-xs"></span><span>' + tripCode + '</span></button>'
+        : '<span class="text-xs text-muted">-</span>';
+
+      const canDetach = inv.trip && (inv.trip.status === 'PENDING' || inv.trip.status === 'ASSIGNED');
+      const detachBtnHtml = canDetach
+        ? '<button onclick="handleDetachInvoice(\\'' + inv.id + '\\', \\'' + (inv.number || '') + '\\')" class="btn btn-secondary btn-xs" title="Desvincular de Rota" style="color:var(--rose-base);"><span data-lucide="link-2-off" class="icon-xs"></span></button>'
+        : '';
 
       return '<tr>' +
-        '<td><span class="font-mono font-bold">' + (inv.number || '-') + (inv.series ? ' / ' + inv.series : '') + '</span></td>' +
-        '<td><span class="font-mono text-xs" title="' + (inv.accessKey || '') + '" style="color:var(--brand-light);">' + accessKeyShort + '</span></td>' +
-        '<td><div class="font-semibold truncate" style="max-width:200px;">' + recipient + '</div><div class="text-xs text-muted">' + location + '</div></td>' +
-        '<td><div class="font-bold">' + tripCode + '</div><div class="text-xs text-muted">' + driverName + '</div></td>' +
-        '<td><span class="font-mono text-xs">' + (inv.volumes || 0) + ' vol | ' + (inv.weightKg || 0) + ' kg</span></td>' +
-        '<td><strong class="font-mono" style="color:var(--emerald-base);">' + formattedValue + '</strong></td>' +
+        '<td style="text-align:center;">' + checkboxHtml + '</td>' +
+        '<td>' +
+          '<div class="font-mono font-bold" style="color:var(--text-primary);">NF nº ' + (inv.number || '-') + '</div>' +
+          '<div class="text-xs text-muted">Série ' + (inv.series || '1') + ' &bull; ' + (inv.source || 'ERP') + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="flex items-center gap-1">' +
+            '<span class="font-mono text-xs" style="color:var(--brand-light);" title="' + accessKey + '">' + accessKeyShort + '</span>' +
+            (accessKey ? '<button onclick="copyToClipboard(\\'' + accessKey + '\\', \\'Chave de acesso copiada!\\')" class="btn btn-secondary btn-xs btn-icon" style="padding:2px 4px; border:none;" title="Copiar Chave"><span data-lucide="key" class="icon-xs"></span></button>' : '') +
+          '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="font-semibold truncate" style="max-width:180px;" title="' + recipient + '">' + recipient + '</div>' +
+          '<div class="text-xs font-mono text-muted">' + doc + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="text-xs truncate" style="max-width:180px;" title="' + address + '">' + address + '</div>' +
+          '<div class="text-xs font-semibold" style="color:var(--brand-light);">' + cityUf + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="font-mono font-bold" style="color:var(--emerald-base);">' + formattedValue + '</div>' +
+          '<div class="text-xs font-mono text-muted">' + volumes + ' vol &bull; ' + weight + ' kg</div>' +
+        '</td>' +
         '<td>' + statusBadge + '</td>' +
+        '<td>' + tripLinkHtml + '</td>' +
         '<td class="text-right">' +
-          '<button onclick="openInvoiceDetails(\\'' + inv.id + '\\')" class="btn btn-secondary btn-xs">' +
-            '<span data-lucide="eye" class="icon-xs"></span>' +
-            '<span>Detalhes</span>' +
-          '</button>' +
+          '<div class="flex items-center justify-end gap-1">' +
+            '<button onclick="openInvoiceDetails(\\'' + inv.id + '\\')" class="btn btn-secondary btn-xs" title="Ver Detalhes">' +
+              '<span data-lucide="eye" class="icon-xs"></span>' +
+              '<span>Ver</span>' +
+            '</button>' +
+            detachBtnHtml +
+          '</div>' +
         '</td>' +
       '</tr>';
     }).join('');
@@ -2394,41 +2506,324 @@ export const ADMIN_JS_TEMPLATE = `
     renderIcons();
   }
 
+  function toggleInvoiceSelection(id, checked) {
+    if (checked) {
+      STATE.selectedInvoiceIds.add(id);
+    } else {
+      STATE.selectedInvoiceIds.delete(id);
+    }
+    updateSelectedInvoicesCounter();
+  }
+
+  function toggleSelectAllInvoices(checked) {
+    const filtered = getFilteredInvoices();
+    filtered.forEach(inv => {
+      const isAvailable = inv.isAvailableForRouting || inv.operationalStatus === 'AVAILABLE' || (!inv.tripId && inv.fiscalStatus !== 'CANCELLED');
+      if (isAvailable) {
+        if (checked) STATE.selectedInvoiceIds.add(inv.id);
+        else STATE.selectedInvoiceIds.delete(inv.id);
+      }
+    });
+    renderInvoicesTable();
+  }
+
+  function selectAllAvailableInvoices(select) {
+    const cb = document.getElementById('invoice-select-all-cb');
+    if (cb) cb.checked = select;
+    toggleSelectAllInvoices(select);
+  }
+
+  function updateSelectedInvoicesCounter() {
+    const count = STATE.selectedInvoiceIds.size;
+    const countSpan = document.getElementById('selected-invoices-count');
+    if (countSpan) countSpan.innerText = count;
+
+    const btn = document.getElementById('btn-create-trip-from-nfs');
+    if (btn) {
+      btn.disabled = count === 0;
+      if (count > 0) {
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      } else {
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      }
+    }
+  }
+
+  async function handleSyncErpInvoices() {
+    const btn = document.getElementById('btn-sync-erp-nfs');
+    if (btn) btn.disabled = true;
+
+    try {
+      showToast('Sincronizando Notas Fiscais com o ERP HK Transportes...', 'info');
+      const res = await apiFetch('/api/v1/admin/invoices/sync-erp', { method: 'POST' });
+      showToast('Sincronização concluída! ' + (res.newInvoicesImported || 0) + ' nova(s) NF(s) importada(s). ' + (res.totalAvailableForRouting || 0) + ' disponível(is) para rota.', 'success');
+      loadInvoices();
+    } catch (err) {
+      showToast('Erro ao sincronizar com ERP: ' + err.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function handleDetachInvoice(invoiceId, invoiceNumber) {
+    if (!confirm('Deseja realmente desvincular a NF nº ' + invoiceNumber + ' da viagem? Ela retornará à lista de NFs disponíveis para roteirização.')) {
+      return;
+    }
+
+    try {
+      await apiFetch('/api/v1/admin/invoices/' + invoiceId + '/detach', { method: 'POST' });
+      showToast('NF nº ' + invoiceNumber + ' desvinculada com sucesso!', 'success');
+      loadInvoices();
+      if (STATE.currentView === 'trips') loadTrips();
+    } catch (err) {
+      showToast('Erro ao desvincular Nota Fiscal: ' + err.message, 'error');
+    }
+  }
+
   async function openInvoiceDetails(id) {
     try {
       const invoice = await apiFetch('/api/v1/admin/invoices/' + id);
       if (!invoice) return;
 
-      document.getElementById('invoice-detail-title').innerText = 'NF-e nº ' + (invoice.number || '-') + (invoice.series ? ' (Série ' + invoice.series + ')' : '');
-      document.getElementById('invoice-detail-sub').innerText = 'Cadastrada no HK Connect via ERP Integrado';
+      document.getElementById('invoice-detail-title').innerText = 'NF-e nº ' + (invoice.number || '-') + ' (Série ' + (invoice.series || '1') + ')';
+      document.getElementById('invoice-detail-sub').innerText = 'Fonte da Verdade: ERP HK Transportes &bull; Importado em ' + formatDate(invoice.createdAt);
       document.getElementById('invoice-detail-key').innerText = invoice.accessKey || 'Não informada';
       document.getElementById('invoice-detail-number').innerText = (invoice.number || '-') + ' / ' + (invoice.series || '1');
-      document.getElementById('invoice-detail-value').innerText = invoice.totalValue ? formatCurrency(invoice.totalValue) : (invoice.value ? formatCurrency(invoice.value) : 'R$ 0,00');
-      document.getElementById('invoice-detail-weight-vol').innerText = (invoice.volumes || 0) + ' volumes | ' + (invoice.weightKg || 0) + ' kg';
+      document.getElementById('invoice-detail-value').innerText = formatCurrency(invoice.value || invoice.totalValue || 0);
+      document.getElementById('invoice-detail-weight-vol').innerText = (invoice.volumeCount || invoice.volumes || 1) + ' vol | ' + (invoice.weight || invoice.weightKg || 0) + ' kg';
 
-      let statusBadge = '<span class="badge badge-muted">' + invoice.status + '</span>';
-      if (invoice.status === 'DELIVERED') statusBadge = '<span class="badge badge-emerald">ENTREGUE</span>';
+      let statusBadge = '<span class="badge badge-success">DISPONÍVEL P/ ROTA</span>';
+      if (invoice.fiscalStatus === 'CANCELLED') statusBadge = '<span class="badge badge-rose">CANCELADA NO ERP</span>';
+      else if (invoice.status === 'DELIVERED') statusBadge = '<span class="badge badge-purple">ENTREGUE (POD)</span>';
       else if (invoice.status === 'IN_TRANSIT') statusBadge = '<span class="badge badge-cyan">EM TRÂNSITO</span>';
-      else if (invoice.status === 'RETURNED' || invoice.status === 'CANCELLED') statusBadge = '<span class="badge badge-rose">' + invoice.status + '</span>';
+      else if (invoice.trip) statusBadge = '<span class="badge badge-amber">RASCUNHO DE ROTA</span>';
       document.getElementById('invoice-detail-status-badge').innerHTML = statusBadge;
 
-      document.getElementById('invoice-detail-recipient').innerText = invoice.recipient || invoice.delivery?.recipient || 'Não informado';
-      const address = invoice.delivery?.address || (invoice.delivery?.city ? (invoice.delivery.city + '/' + (invoice.delivery.state || '')) : 'Não informado');
-      document.getElementById('invoice-detail-address').innerText = address;
+      document.getElementById('invoice-detail-recipient').innerText = (invoice.recipient || invoice.delivery?.recipient || 'Cliente') + (invoice.recipientDocument ? ' (' + invoice.recipientDocument + ')' : '');
+      const fullAddr = [
+        invoice.address || invoice.delivery?.address,
+        invoice.numberAddress ? 'nº ' + invoice.numberAddress : '',
+        invoice.neighborhood || invoice.delivery?.neighborhood,
+        (invoice.city || invoice.delivery?.city || 'São Paulo') + ' - ' + (invoice.state || invoice.delivery?.state || 'SP'),
+        invoice.postalCode ? 'CEP ' + invoice.postalCode : ''
+      ].filter(Boolean).join(', ');
+      document.getElementById('invoice-detail-address').innerText = fullAddr || 'Não informado';
 
       const tripInfo = document.getElementById('invoice-detail-trip-info');
       const tripAction = document.getElementById('invoice-detail-trip-action');
       if (invoice.trip) {
-        tripInfo.innerHTML = 'Viagem: <span style="color:var(--brand-primary);">' + invoice.trip.tripCode + '</span> (' + (invoice.trip.origin || '') + ' -> ' + (invoice.trip.destination || '') + ') - Motorista: ' + (invoice.trip.driver?.user?.name || '-');
-        tripAction.innerHTML = '<button onclick="closeModal(\\'modal-invoice-details\\'); openTripDetails(\\'' + invoice.trip.id + '\\');" class="btn btn-secondary btn-xs"><span data-lucide="navigation" class="icon-xs"></span><span>Ver Viagem</span></button>';
+        tripInfo.innerHTML = '<span style="color:var(--brand-light);">' + invoice.trip.tripCode + '</span> &bull; ' + (invoice.trip.origin || '') + ' &rarr; ' + (invoice.trip.destination || '') + '<br><span class="text-xs font-normal text-muted">Motorista: ' + (invoice.trip.driver?.user?.name || 'Não atribuído') + ' &bull; Veículo: ' + (invoice.trip.vehicle?.plate || '-') + '</span>';
+        tripAction.innerHTML = '<button onclick="closeModal(\\'modal-invoice-details\\'); openTripDetailsModal(\\'' + invoice.trip.id + '\\');" class="btn btn-secondary btn-xs"><span data-lucide="navigation" class="icon-xs"></span><span>Ver Viagem</span></button>';
       } else {
-        tripInfo.innerText = 'Sem viagem associada no momento';
+        tripInfo.innerHTML = '<span class="text-xs" style="color:var(--emerald-base); font-weight:600;">Disponível no ERP para montagem de rota operacional</span>';
         tripAction.innerHTML = '';
       }
 
+      renderIcons();
       openModal('modal-invoice-details');
     } catch (err) {
-      showToast('Erro ao carregar detalhes da nota fiscal: ' + err.message, 'error');
+      showToast('Erro ao carregar detalhes da Nota Fiscal: ' + err.message, 'error');
+    }
+  }
+
+  // ==============================================
+  // CRIAÇÃO DE ROTA A PARTIR DE NOTAS FISCAIS SELECIONADAS
+  // ==============================================
+  async function openCreateTripFromSelectedInvoicesModal() {
+    const selectedIds = Array.from(STATE.selectedInvoiceIds);
+    if (selectedIds.length === 0) {
+      showToast('Selecione pelo menos uma Nota Fiscal para criar a rota.', 'error');
+      return;
+    }
+
+    const selectedInvoices = (STATE.invoices || []).filter(i => selectedIds.includes(i.id));
+    if (selectedInvoices.length === 0) {
+      showToast('Nenhuma das Notas Fiscais selecionadas foi localizada.', 'error');
+      return;
+    }
+
+    // Carregar Motoristas e Veículos para os selects se ainda não carregados
+    try {
+      if (!STATE.drivers || STATE.drivers.length === 0) {
+        STATE.drivers = await apiFetch('/api/v1/admin/drivers');
+      }
+      if (!STATE.vehicles || STATE.vehicles.length === 0) {
+        STATE.vehicles = await apiFetch('/api/v1/admin/vehicles');
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar motoristas/veículos para rota:', e);
+    }
+
+    // Preencher Select de Motoristas
+    const driverSelect = document.getElementById('nf-modal-driver-select');
+    if (driverSelect) {
+      const activeDrivers = (STATE.drivers || []).filter(d => d.status === 'ATIVO' || d.status === 'DISPONIVEL' || !d.status);
+      driverSelect.innerHTML = '<option value="">Selecione o motorista (ou deixe vazio p/ rascunho)...</option>' +
+        activeDrivers.map(d => {
+          const name = d.user?.name || ('Motorista ' + (d.cnh || d.id.slice(0, 6)));
+          const cnh = d.cnh ? ' - CNH: ' + d.cnh : '';
+          return '<option value="' + d.id + '">' + name + cnh + '</option>';
+        }).join('');
+    }
+
+    // Preencher Select de Veículos
+    const vehicleSelect = document.getElementById('nf-modal-vehicle-select');
+    if (vehicleSelect) {
+      const activeVehicles = (STATE.vehicles || []).filter(v => v.status !== 'INATIVO' && v.status !== 'MANUTENCAO');
+      vehicleSelect.innerHTML = '<option value="">Selecione o veículo...</option>' +
+        activeVehicles.map(v => {
+          return '<option value="' + v.id + '">' + v.plate + ' - ' + v.model + ' (' + v.type + ')</option>';
+        }).join('');
+    }
+
+    // Auto-preencher código da rota e data padrão (hoje + 1h)
+    const now = new Date();
+    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const codeEl = document.getElementById('nf-modal-trip-code');
+    if (codeEl) codeEl.value = 'HK-' + dateStr + '-' + rand;
+
+    const startDateEl = document.getElementById('nf-modal-start-date');
+    if (startDateEl) {
+      const plusOneHour = new Date(Date.now() + 60 * 60 * 1000);
+      const iso = new Date(plusOneHour.getTime() - plusOneHour.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      startDateEl.value = iso;
+    }
+
+    // Agrupamento Inteligente por Destinatário + Endereço
+    const stopMap = new Map();
+    let totalVol = 0;
+    let totalWeight = 0;
+    let totalVal = 0;
+
+    selectedInvoices.forEach(inv => {
+      const recipient = (inv.recipient || 'Cliente').trim();
+      const addr = (inv.address || '').trim();
+      const city = (inv.city || 'São Paulo').trim();
+      const key = (recipient + ':::' + addr + ':::' + city).toLowerCase();
+
+      const vol = inv.volumeCount || inv.volumes || 1;
+      const wt = inv.weight || inv.weightKg || 0;
+      const val = inv.value || inv.totalValue || 0;
+
+      totalVol += vol;
+      totalWeight += wt;
+      totalVal += val;
+
+      if (!stopMap.has(key)) {
+        stopMap.set(key, {
+          recipient,
+          recipientDocument: inv.recipientDocument,
+          address: addr || 'Endereço de Entrega',
+          numberAddress: inv.numberAddress,
+          city,
+          state: inv.state || 'SP',
+          totalVol: 0,
+          totalWeight: 0,
+          totalVal: 0,
+          invoices: []
+        });
+      }
+
+      const grp = stopMap.get(key);
+      grp.totalVol += vol;
+      grp.totalWeight += wt;
+      grp.totalVal += val;
+      grp.invoices.push(inv);
+    });
+
+    const stops = Array.from(stopMap.values());
+
+    // Atualizar Indicadores do Modal
+    const setModalVal = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = text;
+    };
+    setModalVal('nf-modal-count', selectedInvoices.length + ' NFs');
+    setModalVal('nf-modal-stops-count', stops.length + ' parada(s)');
+    setModalVal('nf-modal-total-weight-vol', totalVol + ' vol | ' + totalWeight.toFixed(1) + ' kg');
+    setModalVal('nf-modal-total-value', formatCurrency(totalVal));
+
+    // Renderizar tabela de paradas
+    const stopsTbody = document.getElementById('nf-modal-grouped-stops-table');
+    if (stopsTbody) {
+      stopsTbody.innerHTML = stops.map((stop, idx) => {
+        const nfBadges = stop.invoices.map(i => '<span class="badge badge-purple font-mono" style="font-size:0.65rem;">NF ' + i.number + '</span>').join(' ');
+        const fullAddr = [stop.address, stop.numberAddress ? 'nº ' + stop.numberAddress : '', stop.city + '/' + stop.state].filter(Boolean).join(', ');
+        return '<tr>' +
+          '<td class="font-bold text-center" style="color:var(--brand-light);">' + (idx + 1) + 'º</td>' +
+          '<td><strong>' + stop.recipient + '</strong><br><span class="text-xs font-mono text-muted">' + (stop.recipientDocument || '') + '</span></td>' +
+          '<td class="text-xs">' + fullAddr + '</td>' +
+          '<td><strong class="font-mono text-xs" style="color:var(--emerald-base);">' + formatCurrency(stop.totalVal) + '</strong><br><span class="text-xs font-mono text-muted">' + stop.totalVol + ' vol &bull; ' + stop.totalWeight + ' kg</span></td>' +
+          '<td><div class="flex items-center gap-1" style="flex-wrap:wrap;">' + nfBadges + '</div></td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    renderIcons();
+    openModal('modal-create-trip-from-invoices');
+  }
+
+  async function submitTripFromInvoices(action = 'DRAFT') {
+    const selectedIds = Array.from(STATE.selectedInvoiceIds);
+    if (selectedIds.length === 0) {
+      showToast('Selecione pelo menos uma Nota Fiscal.', 'error');
+      return;
+    }
+
+    const tripCode = document.getElementById('nf-modal-trip-code')?.value.trim();
+    const startDate = document.getElementById('nf-modal-start-date')?.value;
+    const driverId = document.getElementById('nf-modal-driver-select')?.value || undefined;
+    const vehicleId = document.getElementById('nf-modal-vehicle-select')?.value || undefined;
+    const origin = document.getElementById('nf-modal-origin')?.value.trim();
+    const notes = document.getElementById('nf-modal-notes')?.value.trim();
+
+    if (!tripCode) {
+      showToast('Por favor, informe o código da viagem/rota.', 'error');
+      return;
+    }
+
+    if (action === 'ASSIGN' && !driverId) {
+      showToast('Para despachar imediatamente a rota, selecione o motorista responsável.', 'error');
+      return;
+    }
+
+    try {
+      showToast('Criando rota operacional a partir das Notas Fiscais...', 'info');
+
+      const payload = {
+        invoiceIds: selectedIds,
+        tripCode,
+        startDate: startDate ? new Date(startDate).toISOString() : undefined,
+        driverId: driverId || undefined,
+        vehicleId: vehicleId || undefined,
+        origin: origin || undefined,
+        notes: notes || undefined,
+        action: action
+      };
+
+      const result = await apiFetch('/api/v1/admin/invoices/create-trip', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      showToast(
+        action === 'ASSIGN'
+          ? 'Rota ' + result.tripCode + ' criada e despachada para o motorista com sucesso!'
+          : 'Rota ' + result.tripCode + ' salva como rascunho com sucesso!',
+        'success'
+      );
+
+      // Limpar seleção
+      STATE.selectedInvoiceIds.clear();
+      closeModal('modal-create-trip-from-invoices');
+
+      // Navegar para a visualização de viagens
+      navigate('trips');
+    } catch (err) {
+      showToast('Erro ao criar rota a partir das NFs: ' + err.message, 'error');
     }
   }
 

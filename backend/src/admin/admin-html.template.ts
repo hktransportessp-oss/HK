@@ -536,6 +536,11 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
         <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
         <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Operação</div>
 
+        <button onclick="navigate('invoices')" id="nav-invoices" class="nav-item">
+          <span data-lucide="receipt" class="icon-sm"></span>
+          <span>Notas Fiscais</span>
+        </button>
+
         <button onclick="navigate('trips')" id="nav-trips" class="nav-item">
           <span data-lucide="navigation" class="icon-sm"></span>
           <span>Viagens / Rotas</span>
@@ -963,6 +968,141 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             <tbody id="vehicles-table-body">
               <tr>
                 <td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando veículos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- VIEW: NOTAS FISCAIS (ERP / HK CONNECT) -->
+      <!-- ============================================== -->
+      <section id="view-invoices" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Header Banner & Top Actions -->
+        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <div class="flex items-center gap-2">
+              <span data-lucide="receipt" class="icon-md" style="color: var(--brand-light);"></span>
+              <h2 class="text-lg font-bold">Notas Fiscais (ERP HK Transportes)</h2>
+              <span class="badge badge-purple" style="font-size: 0.7rem;">FONTE DA VERDADE: ERP</span>
+            </div>
+            <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.2rem;">
+              Selecione as Notas Fiscais sincronizadas do ERP para agrupar por destinatário e montar rotas operacionais de entrega.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button onclick="handleSyncErpInvoices()" id="btn-sync-erp-nfs" class="btn btn-secondary" title="Sincronizar NFs recebidas no ERP">
+              <span data-lucide="refresh-cw" class="icon-xs"></span>
+              <span>Sincronizar ERP</span>
+            </button>
+
+            <button onclick="openCreateTripFromSelectedInvoicesModal()" id="btn-create-trip-from-nfs" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);" disabled>
+              <span data-lucide="navigation" class="icon-sm"></span>
+              <span>CRIAR ROTA COM NFs (<span id="selected-invoices-count">0</span>)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Indicators Grid -->
+        <div class="grid-stats">
+          <div class="card" style="padding: 1.1rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider">Total de NFs</span>
+              <span class="badge badge-brand"><span data-lucide="receipt" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-total-invoices" class="text-2xl font-bold" style="color: var(--text-primary);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Base HK Connect / ERP</span>
+          </div>
+
+          <div class="card" style="padding: 1.1rem; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05);">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--emerald-base);">Disponíveis p/ Rota</span>
+              <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-available-invoices" class="text-2xl font-bold" style="color: var(--emerald-base);">-</p>
+            <span class="text-xs" style="color: var(--emerald-base); margin-top: 0.2rem; display: block; opacity: 0.85;">Prontas para roteirização</span>
+          </div>
+
+          <div class="card" style="padding: 1.1rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider">Em Rota / Trânsito</span>
+              <span class="badge badge-cyan"><span data-lucide="truck" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-in-transit-invoices" class="text-2xl font-bold" style="color: var(--cyan-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Vinculadas a viagens ativas</span>
+          </div>
+
+          <div class="card" style="padding: 1.1rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider">Entregues</span>
+              <span class="badge badge-brand"><span data-lucide="check" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-delivered-invoices" class="text-2xl font-bold" style="color: var(--brand-light);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Comprovante POD registrado</span>
+          </div>
+        </div>
+
+        <!-- Filters Bar -->
+        <div class="card" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
+            <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
+              <div class="input-with-icon" style="flex: 1; min-width: 220px;">
+                <span class="input-icon" data-lucide="search"></span>
+                <input type="text" id="invoice-search-input" class="input-control" placeholder="Buscar por Número NF, Chave, Destinatário, Endereço ou Cidade..." oninput="renderInvoicesTable()">
+              </div>
+
+              <select id="invoice-operational-filter" class="input-control" style="width: auto; min-width: 200px;" onchange="renderInvoicesTable()">
+                <option value="AVAILABLE" selected>Disponíveis p/ Rota (Sem Viagem)</option>
+                <option value="ALL">Todas as NFs</option>
+                <option value="ROUTED_DRAFT">Em Rascunho de Rota (PENDING)</option>
+                <option value="IN_TRANSIT">Em Trânsito / Em Rota</option>
+                <option value="DELIVERED">Entregues</option>
+                <option value="RETURNED">Devolvidas</option>
+                <option value="CANCELLED">Canceladas no ERP</option>
+              </select>
+
+              <select id="invoice-fiscal-filter" class="input-control" style="width: auto; min-width: 150px;" onchange="renderInvoicesTable()">
+                <option value="">Status Fiscal: Todos</option>
+                <option value="ACTIVE">Ativas</option>
+                <option value="CANCELLED">Canceladas</option>
+              </select>
+
+              <input type="text" id="invoice-city-filter" class="input-control" style="width: auto; min-width: 140px;" placeholder="Filtrar Cidade..." oninput="renderInvoicesTable()">
+            </div>
+
+            <!-- Action & Refresh -->
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="selectAllAvailableInvoices(true)" class="btn btn-secondary btn-sm">Selecionar Todas</button>
+              <button type="button" onclick="selectAllAvailableInvoices(false)" class="btn btn-secondary btn-sm">Limpar Seleção</button>
+              <button onclick="loadInvoices()" class="btn btn-secondary btn-sm" title="Atualizar">
+                <span data-lucide="refresh-cw" class="icon-xs"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">
+                  <input type="checkbox" id="invoice-select-all-cb" onchange="toggleSelectAllInvoices(this.checked)" title="Selecionar todas as disponíveis">
+                </th>
+                <th>Número / Série</th>
+                <th>Chave de Acesso NF-e</th>
+                <th>Destinatário</th>
+                <th>Endereço / Cidade</th>
+                <th>Volumes / Peso / Valor</th>
+                <th>Situação Operacional</th>
+                <th>Viagem / Rota</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="invoices-table-body">
+              <tr>
+                <td colspan="9" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando Notas Fiscais do ERP...</td>
               </tr>
             </tbody>
           </table>
@@ -2632,6 +2772,128 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
 
       <div class="modal-footer">
         <button type="button" onclick="closeModal('modal-invoice-details')" class="btn btn-secondary">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CRIAR ROTA COM NOTAS FISCAIS SELECIONADAS -->
+  <div id="modal-create-trip-from-invoices" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 880px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div class="flex items-center gap-3">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; color: #fff;">
+            <span data-lucide="navigation" class="icon-md"></span>
+          </div>
+          <div>
+            <h3 class="text-base font-bold">Criar Nova Rota a partir de Notas Fiscais</h3>
+            <p class="text-xs" style="color: var(--text-secondary);">Agrupamento automático por destinatário e local de entrega para despacho ao motorista.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-create-trip-from-invoices')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1;">
+        <!-- Resumo da Carga / NFs Selecionadas -->
+        <div class="grid-4" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
+          <div>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">NFs Selecionadas</span>
+            <strong id="nf-modal-count" class="text-base font-mono" style="color: var(--brand-light);">0 NFs</strong>
+          </div>
+          <div>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">Destinatários / Paradas</span>
+            <strong id="nf-modal-stops-count" class="text-base font-mono">0 paradas</strong>
+          </div>
+          <div>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">Total Volumes / Peso</span>
+            <strong id="nf-modal-total-weight-vol" class="text-base font-mono">-</strong>
+          </div>
+          <div>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">Valor Total das NFs</span>
+            <strong id="nf-modal-total-value" class="text-base font-mono" style="color: var(--emerald-base);">-</strong>
+          </div>
+        </div>
+
+        <!-- Paradas Geradas (Visualização e Sequenciamento) -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.5rem;">Paradas & Entregas Agrupadas</h4>
+          <div class="table-container" style="max-height: 200px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Seq.</th>
+                  <th>Destinatário</th>
+                  <th>Endereço / Cidade</th>
+                  <th>Volumes / Peso / Valor</th>
+                  <th>NFs Vinculadas</th>
+                </tr>
+              </thead>
+              <tbody id="nf-modal-grouped-stops-table">
+                <tr><td colspan="5" class="text-center text-xs" style="padding: 1rem; color: var(--text-muted);">Nenhuma NF selecionada.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Atribuição Operacional: Motorista, Veículo, Código da Rota e Origem -->
+        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;">
+          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--brand-light);">Configuração da Rota Operacional</h4>
+          
+          <div class="grid-2">
+            <div>
+              <label>Código da Viagem / Rota *</label>
+              <input type="text" id="nf-modal-trip-code" class="input-control font-mono font-bold" required placeholder="HK-2026-0001">
+            </div>
+
+            <div>
+              <label>Data / Hora Programada de Saída *</label>
+              <input type="datetime-local" id="nf-modal-start-date" class="input-control" required>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label>Motorista Responsável (Opcional p/ Rascunho)</label>
+              <select id="nf-modal-driver-select" class="input-control">
+                <option value="">Selecione o motorista...</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Veículo Alocado (Opcional p/ Rascunho)</label>
+              <select id="nf-modal-vehicle-select" class="input-control">
+                <option value="">Selecione o veículo...</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label>Origem da Viagem (CD / Hub Logístico)</label>
+            <input type="text" id="nf-modal-origin" class="input-control" value="CD HK Transportes - Av. dos Autonomistas, 1200, Osasco - SP">
+          </div>
+
+          <div>
+            <label>Observações Operacionais</label>
+            <input type="text" id="nf-modal-notes" class="input-control" placeholder="Orientações para o motorista, manuseio de carga, conferência...">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between;">
+        <button type="button" onclick="closeModal('modal-create-trip-from-invoices')" class="btn btn-secondary">Cancelar</button>
+        
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="submitTripFromInvoices('DRAFT')" class="btn btn-secondary" style="border-color: var(--brand-light); color: var(--brand-light);">
+            <span data-lucide="file-text" class="icon-xs"></span>
+            <span>Salvar como Rascunho</span>
+          </button>
+
+          <button type="button" onclick="submitTripFromInvoices('ASSIGN')" class="btn btn-primary">
+            <span data-lucide="navigation" class="icon-xs"></span>
+            <span>Criar e Despachar Rota</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

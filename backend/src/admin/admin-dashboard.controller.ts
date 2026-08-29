@@ -208,16 +208,74 @@ export class AdminDashboardController {
 
   // --- NOTAS FISCAIS ---
   @Get('invoices')
-  @ApiOperation({ summary: 'Listar e pesquisar Notas Fiscais eletrônicas' })
+  @ApiOperation({ summary: 'Listar e pesquisar Notas Fiscais eletrônicas com filtros operacionais' })
   async listInvoices(
     @Query('status') status?: InvoiceStatus,
+    @Query('fiscalStatus') fiscalStatus?: string,
+    @Query('routed') routed?: string,
+    @Query('availableForRouting') availableForRouting?: string,
+    @Query('city') city?: string,
     @Query('tripId') tripId?: string,
     @Query('driverId') driverId?: string,
     @Query('search') search?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.adminUsersService.listAdminInvoices({ status, tripId, driverId, search, startDate, endDate });
+    return this.adminUsersService.listAdminInvoices({
+      status,
+      fiscalStatus,
+      routed,
+      availableForRouting: availableForRouting === 'true' || availableForRouting === '1',
+      city,
+      tripId,
+      driverId,
+      search,
+      startDate,
+      endDate,
+    });
+  }
+
+  @Get('invoices/available')
+  @ApiOperation({ summary: 'Listar Notas Fiscais disponíveis para roteirização (sem viagem ativa)' })
+  async getInvoicesAvailableForRouting(@Query('city') city?: string) {
+    return this.adminUsersService.listAdminInvoices({
+      availableForRouting: true,
+      city,
+    });
+  }
+
+  @Post('invoices/create-trip')
+  @ApiOperation({ summary: 'Criar nova viagem/rota a partir de Notas Fiscais selecionadas no ERP/HK' })
+  async createTripFromInvoices(
+    @Body() dto: {
+      invoiceIds: string[];
+      driverId?: string;
+      vehicleId?: string;
+      origin?: string;
+      tripCode?: string;
+      startDate?: string;
+      notes?: string;
+      action?: 'DRAFT' | 'ASSIGN';
+      stops?: any[];
+    },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.createTripFromInvoices(dto, actor);
+  }
+
+  @Post('invoices/sync-erp')
+  @ApiOperation({ summary: 'Sincronizar/Reconciliar Notas Fiscais do ERP manualmente' })
+  async syncErpInvoices(@GetUser() actor: { id: string }) {
+    return this.adminUsersService.syncErpInvoices(actor);
+  }
+
+  @Post('invoices/:id/detach')
+  @ApiOperation({ summary: 'Desvincular NF-e de rota antes do início' })
+  async detachInvoiceFromTrip(
+    @Param('id') id: string,
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.detachInvoiceFromTrip(id, actor);
   }
 
   @Get('invoices/:id')

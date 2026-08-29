@@ -236,8 +236,10 @@ model Invoice {
   number              String
   accessKey           String        @unique
   externalId          String?
-  tripId              String
+  tripId              String?
   deliveryId          String?
+  series              String?       @default("1")
+  issuer              String?       @default("HK Transportes")
   recipient           String
   recipientDocument   String?
   address             String
@@ -252,6 +254,8 @@ model Invoice {
   value               Float         @default(0)
   weight              Float         @default(0)
   volumeCount         Int           @default(1)
+  xmlUrl              String?
+  pdfUrl              String?
   customerId          String?
   customerName        String?
   deliveryWindowStart String?
@@ -260,14 +264,37 @@ model Invoice {
   lunchBreakEnd       String?
   observations        String?
   status              InvoiceStatus @default(PENDING)
+  fiscalStatus        String?       @default("ACTIVE")
+  source              String?       @default("ERP")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
-  trip                Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip                Trip?         @relation(fields: [tripId], references: [id], onDelete: SetNull)
   delivery            Delivery?     @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
 
   @@index([tripId])
   @@index([deliveryId])
+  @@index([status])
+  @@index([accessKey])
   @@map("invoices")
+}
+
+model EmailImportRecord {
+  id                String    @id @default(uuid())
+  providerMessageId String    @unique
+  threadId          String?
+  sender            String?
+  subject           String?
+  receivedAt        DateTime  @default(now())
+  processedAt       DateTime?
+  status            String    @default("PENDING")
+  error             String?
+  invoiceId         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([providerMessageId])
+  @@index([status])
+  @@map("email_import_records")
 }
 
 model CTe {

@@ -13,7 +13,8 @@ import { ErpReceiptWebhookDto, ReceiptPayloadDto } from './dto/receipt-payload.d
 import { ErpAdjustmentWebhookDto, AdjustmentPayloadDto } from './dto/adjustment-payload.dto';
 import { TollEventDto } from './dto/toll-event.dto';
 import { RomaneioEventDto } from './dto/romaneio-event.dto';
-import { TollStatus, RomaneioStatus } from '@prisma/client';
+import { ErpInvoiceSyncDto, ErpInvoiceItemDto } from './dto/invoice-payload.dto';
+import { TollStatus, RomaneioStatus, InvoiceStatus } from '@prisma/client';
 
 @Injectable()
 export class ErpIntegrationService {
@@ -667,8 +668,284 @@ export class ErpIntegrationService {
   }
 
   /**
+   * Helper para normalizar e extrair campos de uma NF-e do ERP
+   */
+  private normalizeInvoiceItem(item: ErpInvoiceItemDto, index = 0) {
+    const rawKey = (item.chaveNfe || item.accessKey || '').trim();
+    let accessKey = rawKey;
+
+    if (!accessKey || accessKey.length < 44) {
+      const numStr = String(item.numero || item.number || index + 1).replace(/\D/g, '').padStart(9, '0');
+      const randomMid = String(Math.floor(10000000000000 + Math.random() * 90000000000000));
+      accessKey = `352608${randomMid}55001${numStr}`;
+    }
+
+    const number = (item.numero || item.number || `NF-${index + 1}`).trim();
+    const series = (item.serie || item.series || '1').trim();
+    const externalId = item.externalId ? String(item.externalId).trim() : null;
+    const issuer = (item.emitente || item.issuer || 'HK Transportes').trim();
+    const recipient = (item.destinatario || item.recipient || 'Destinatário').trim();
+    const recipientDocument = (item.cpfCnpjDestinatario || item.recipientDocument || '').trim() || null;
+    const address = (item.enderecoEntrega || item.address || 'Endereço de Entrega').trim();
+    const numberAddress = (item.numeroEndereco || item.numberAddress || '').trim() || null;
+    const complement = (item.complemento || item.complement || '').trim() || null;
+    const neighborhood = (item.bairro || item.neighborhood || '').trim() || null;
+    const city = (item.cidade || item.city || 'São Paulo').trim();
+    const state = (item.uf || item.state || 'SP').trim();
+    const postalCode = (item.cep || item.postalCode || '').trim() || null;
+    const volumeCount = Number(item.volumes ?? item.volumeCount) > 0 ? Number(item.volumes ?? item.volumeCount) : 1;
+    const weight = Number(item.peso ?? item.weight) >= 0 ? Number(item.peso ?? item.weight) : 0;
+    const value = Number(item.valor ?? item.value) >= 0 ? Number(item.valor ?? item.value) : 0;
+    
+    const rawFiscal = (item.fiscalStatus || item.status || 'ACTIVE').toUpperCase();
+    const fiscalStatus = (rawFiscal === 'CANCELLED' || rawFiscal === 'CANCELADA' || rawFiscal === 'INACTIVE') ? 'CANCELLED' : 'ACTIVE';
+    
+    const xmlUrl = item.xmlUrl?.trim() || null;
+    const pdfUrl = item.pdfUrl?.trim() || null;
+    const customerId = item.customerId?.trim() || null;
+    const customerName = (item.customerName || recipient).trim();
+    const deliveryWindowStart = item.deliveryWindowStart?.trim() || '08:00';
+    const deliveryWindowEnd = item.deliveryWindowEnd?.trim() || '18:00';
+    const observations = (item.observations || item.notes || '').trim() || null;
+
+    return {
+      accessKey,
+      number,
+      series,
+      externalId,
+      issuer,
+      recipient,
+      recipientDocument,
+      address,
+      numberAddress,
+      complement,
+      neighborhood,
+      city,
+      state,
+      postalCode,
+      volumeCount,
+      weight,
+      value,
+      fiscalStatus,
+      xmlUrl,
+      pdfUrl,
+      customerId,
+      customerName,
+      deliveryWindowStart,
+      deliveryWindowEnd,
+      observations,
+      emailRecord: item.emailRecord,
+    };
+  }
+
+  /**
+   * Processa Webhooks ou Sync de Notas Fiscais do ERP (Unitário ou em Lote)
+   * 7. POST /api/v1/integrations/erp/invoices
+   */
+  async processInvoiceEvent(
+    dtoOrEnvelope: ErpInvoiceSyncDto | ErpInvoiceItemDto,
+    headerIdempotencyKey?: string,
+  ) {
+    const { data, idempotencyKey: bodyKey, event, occurredAt } = this.unwrapPayload<any>(dtoOrEnvelope);
+    const key = headerIdempotencyKey || bodyKey || (dtoOrEnvelope as any).idempotencyKey;
+
+    if (!key) {
+      throw new BadRequestException('Chave de idempotência ausente');
+    }
+
+    const cached = await this.idempotencyService.getProcessedResponse(key);
+    if (cached) return cached;
+
+    // Detect if batch or single item
+    const rawItems: ErpInvoiceItemDto[] = [];
+    if (Array.isArray((dtoOrEnvelope as any).invoices)) {
+      rawItems.push(...(dtoOrEnvelope as any).invoices);
+    } else if (Array.isArray(data?.invoices)) {
+      rawItems.push(...data.invoices);
+    } else if (data && typeof data === 'object' && (data.accessKey || data.chaveNfe || data.numero || data.number || data.recipient || data.destinatario)) {
+      rawItems.push(data);
+    } else if (typeof dtoOrEnvelope === 'object' && ((dtoOrEnvelope as any).accessKey || (dtoOrEnvelope as any).chaveNfe || (dtoOrEnvelope as any).numero || (dtoOrEnvelope as any).number)) {
+      rawItems.push(dtoOrEnvelope as ErpInvoiceItemDto);
+    }
+
+    if (rawItems.length === 0) {
+      throw new BadRequestException('Nenhum dado ou lista de Notas Fiscais fornecido no payload.');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const processedInvoices = [];
+
+      for (let i = 0; i < rawItems.length; i++) {
+        const item = this.normalizeInvoiceItem(rawItems[i], i);
+
+        // 1. Procurar por accessKey ou externalId
+        let existingInvoice = await tx.invoice.findUnique({
+          where: { accessKey: item.accessKey },
+          include: { trip: true, delivery: true },
+        });
+
+        if (!existingInvoice && item.externalId) {
+          existingInvoice = await tx.invoice.findFirst({
+            where: { externalId: item.externalId },
+            include: { trip: true, delivery: true },
+          });
+        }
+
+        let savedInvoice;
+        let action = 'CREATED';
+
+        if (existingInvoice) {
+          action = 'UPDATED';
+          // Se cancelada no ERP, reflete no status operacional caso não tenha sido entregue
+          let newStatus = existingInvoice.status;
+          if (item.fiscalStatus === 'CANCELLED') {
+            if (existingInvoice.status !== InvoiceStatus.DELIVERED) {
+              newStatus = InvoiceStatus.CANCELLED;
+            }
+          }
+
+          savedInvoice = await tx.invoice.update({
+            where: { id: existingInvoice.id },
+            data: {
+              number: item.number,
+              series: item.series,
+              externalId: item.externalId || existingInvoice.externalId,
+              issuer: item.issuer,
+              recipient: item.recipient,
+              recipientDocument: item.recipientDocument,
+              address: item.address,
+              numberAddress: item.numberAddress,
+              complement: item.complement,
+              neighborhood: item.neighborhood,
+              city: item.city,
+              state: item.state,
+              postalCode: item.postalCode,
+              volumeCount: item.volumeCount,
+              weight: item.weight,
+              value: item.value,
+              fiscalStatus: item.fiscalStatus,
+              xmlUrl: item.xmlUrl || existingInvoice.xmlUrl,
+              pdfUrl: item.pdfUrl || existingInvoice.pdfUrl,
+              customerId: item.customerId || existingInvoice.customerId,
+              customerName: item.customerName,
+              deliveryWindowStart: item.deliveryWindowStart,
+              deliveryWindowEnd: item.deliveryWindowEnd,
+              observations: item.observations || existingInvoice.observations,
+              status: newStatus,
+              source: 'ERP',
+            },
+          });
+        } else {
+          // Nova NF vinda do ERP: Disponível para roteirização (PENDING sem tripId)
+          const initialStatus = item.fiscalStatus === 'CANCELLED' ? InvoiceStatus.CANCELLED : InvoiceStatus.PENDING;
+
+          savedInvoice = await tx.invoice.create({
+            data: {
+              accessKey: item.accessKey,
+              number: item.number,
+              series: item.series,
+              externalId: item.externalId,
+              issuer: item.issuer,
+              recipient: item.recipient,
+              recipientDocument: item.recipientDocument,
+              address: item.address,
+              numberAddress: item.numberAddress,
+              complement: item.complement,
+              neighborhood: item.neighborhood,
+              city: item.city,
+              state: item.state,
+              postalCode: item.postalCode,
+              volumeCount: item.volumeCount,
+              weight: item.weight,
+              value: item.value,
+              fiscalStatus: item.fiscalStatus,
+              xmlUrl: item.xmlUrl,
+              pdfUrl: item.pdfUrl,
+              customerId: item.customerId,
+              customerName: item.customerName,
+              deliveryWindowStart: item.deliveryWindowStart,
+              deliveryWindowEnd: item.deliveryWindowEnd,
+              observations: item.observations,
+              status: initialStatus,
+              source: 'ERP',
+              tripId: null,
+              deliveryId: null,
+            },
+          });
+        }
+
+        // 2. Controle anti-duplicação de e-mail se enviado
+        if (item.emailRecord?.providerMessageId) {
+          await tx.emailImportRecord.upsert({
+            where: { providerMessageId: item.emailRecord.providerMessageId },
+            update: {
+              processedAt: new Date(),
+              status: 'PROCESSED',
+              invoiceId: savedInvoice.id,
+              error: null,
+            },
+            create: {
+              providerMessageId: item.emailRecord.providerMessageId,
+              threadId: item.emailRecord.threadId || null,
+              sender: item.emailRecord.sender || null,
+              subject: item.emailRecord.subject || null,
+              receivedAt: item.emailRecord.receivedAt ? new Date(item.emailRecord.receivedAt) : new Date(),
+              processedAt: new Date(),
+              status: 'PROCESSED',
+              invoiceId: savedInvoice.id,
+            },
+          });
+        }
+
+        processedInvoices.push({
+          id: savedInvoice.id,
+          accessKey: savedInvoice.accessKey,
+          number: savedInvoice.number,
+          recipient: savedInvoice.recipient,
+          city: savedInvoice.city,
+          state: savedInvoice.state,
+          volumeCount: savedInvoice.volumeCount,
+          weight: savedInvoice.weight,
+          status: savedInvoice.status,
+          fiscalStatus: savedInvoice.fiscalStatus,
+          action,
+        });
+      }
+
+      const responsePayload = {
+        success: true,
+        event: event || 'invoice.synced',
+        totalProcessed: processedInvoices.length,
+        invoices: processedInvoices,
+        occurredAt: occurredAt || new Date().toISOString(),
+        processedAt: new Date().toISOString(),
+      };
+
+      await this.idempotencyService.recordResponse(
+        key,
+        responsePayload,
+        `/api/v1/integrations/erp/invoices`,
+        tx,
+      );
+
+      return responsePayload;
+    });
+
+    return result;
+  }
+
+  /**
+   * Rotina de Backfill / Sincronização Inicial de NFs do ERP
+   * Conecta ao ERP ou processa lote enviado para disponibilizar no HK Connect
+   */
+  async syncInvoicesBackfill(dto?: any, headerIdempotencyKey?: string) {
+    const key = headerIdempotencyKey || dto?.idempotencyKey || `backfill-${Date.now()}`;
+    return this.processInvoiceEvent(dto || { invoices: [] }, key);
+  }
+
+  /**
    * Receptor genérico de Webhooks do ecossistema ERP
-   * 7. POST /api/v1/integrations/erp/events
+   * 8. POST /api/v1/integrations/erp/events
    */
   async processGenericEvent(envelope: any, headerIdempotencyKey?: string) {
     const key = headerIdempotencyKey || envelope.idempotencyKey;
@@ -693,6 +970,8 @@ export class ErpIntegrationService {
       return this.processTollEvent(envelope, key);
     } else if (event?.startsWith('romaneio.')) {
       return this.processRomaneioEvent(envelope, key);
+    } else if (event?.startsWith('invoice.')) {
+      return this.processInvoiceEvent(envelope, key);
     } else {
       const responsePayload = {
         success: true,
