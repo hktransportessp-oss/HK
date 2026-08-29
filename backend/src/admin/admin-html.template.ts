@@ -970,26 +970,67 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </section>
 
       <!-- ============================================== -->
-      <!-- VIEW 4: VIAGENS -->
+      <!-- VIEW 4: VIAGENS / ROTAS -->
       <!-- ============================================== -->
       <section id="view-trips" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- Filters & Actions -->
-        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
-          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
-            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
-              <span class="input-icon" data-lucide="search"></span>
-              <input type="text" id="trip-search-input" class="input-control" placeholder="Buscar por Código, Origem, Destino, Motorista ou Placa...">
+        <!-- Header Banner & Action -->
+        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <span data-lucide="navigation" class="icon-md" style="color: var(--brand-light);"></span>
+              <span>Gestão de Viagens / Rotas Operacionais</span>
+            </h2>
+            <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">
+              Criação, montagem de paradas, despacho para motoristas e acompanhamento operacional em tempo real.
+            </p>
+          </div>
+
+          <button onclick="openCreateTripModal()" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.95rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);">
+            <span data-lucide="plus-circle" class="icon-sm"></span>
+            <span>+ NOVA VIAGEM / ROTA</span>
+          </button>
+        </div>
+
+        <!-- Filters Bar -->
+        <div class="card" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
+            <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
+              <div class="input-with-icon" style="flex: 1; min-width: 220px;">
+                <span class="input-icon" data-lucide="search"></span>
+                <input type="text" id="trip-search-input" class="input-control" placeholder="Buscar por Código, Origem, Destino, Motorista ou Placa..." oninput="renderTripsTable()">
+              </div>
+
+              <select id="trip-status-filter" class="input-control" style="width: auto; min-width: 170px;" onchange="renderTripsTable()">
+                <option value="">Todos os Status</option>
+                <option value="ASSIGNED">Atribuída / Despachada (ASSIGNED)</option>
+                <option value="PENDING">Rascunho / Pendente (PENDING)</option>
+                <option value="ACCEPTED">Aceita pelo Motorista (ACCEPTED)</option>
+                <option value="IN_PROGRESS">Em Andamento / Em Rota (IN_PROGRESS)</option>
+                <option value="COMPLETED">Concluída (COMPLETED)</option>
+                <option value="CANCELLED">Cancelada (CANCELLED)</option>
+              </select>
+
+              <select id="trip-driver-filter" class="input-control" style="width: auto; min-width: 160px;" onchange="renderTripsTable()">
+                <option value="">Todos os Motoristas</option>
+              </select>
             </div>
 
-            <select id="trip-status-filter" class="input-control" style="width: auto; min-width: 170px;">
-              <option value="">Todos os Status</option>
-              <option value="ASSIGNED">Atribuída (ASSIGNED)</option>
-              <option value="PENDING">Pendente (PENDING)</option>
-              <option value="ACCEPTED">Aceita (ACCEPTED)</option>
-              <option value="IN_PROGRESS">Em Andamento (IN_PROGRESS)</option>
-              <option value="COMPLETED">Concluída (COMPLETED)</option>
-              <option value="CANCELLED">Cancelada (CANCELLED)</option>
-            </select>
+            <!-- Quick Date Filters -->
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="setTripDateQuickFilter('today')" class="btn btn-secondary btn-sm" id="btn-quick-today">Hoje</button>
+              <button type="button" onclick="setTripDateQuickFilter('tomorrow')" class="btn btn-secondary btn-sm" id="btn-quick-tomorrow">Amanhã</button>
+              <button type="button" onclick="setTripDateQuickFilter('all')" class="btn btn-secondary btn-sm active" id="btn-quick-all">Todas</button>
+              
+              <div class="flex items-center gap-1" style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">
+                <input type="date" id="trip-start-date" class="input-control" style="width: auto; padding: 0.35rem 0.5rem;" onchange="renderTripsTable()">
+                <span>até</span>
+                <input type="date" id="trip-end-date" class="input-control" style="width: auto; padding: 0.35rem 0.5rem;" onchange="renderTripsTable()">
+              </div>
+
+              <button onclick="loadTrips()" class="btn btn-secondary btn-sm" title="Atualizar">
+                <span data-lucide="refresh-cw" class="icon-xs"></span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -998,18 +1039,20 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
           <table>
             <thead>
               <tr>
-                <th>Código</th>
+                <th>Código Rota</th>
+                <th>Data Programada</th>
                 <th>Motorista</th>
                 <th>Veículo</th>
                 <th>Origem / Destino</th>
+                <th>Paradas / Entregas</th>
                 <th>Status</th>
-                <th>Data Início / Fim</th>
+                <th>Última Atualização</th>
                 <th class="text-right">Ações</th>
               </tr>
             </thead>
             <tbody id="trips-table-body">
               <tr>
-                <td colspan="7" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando viagens...</td>
+                <td colspan="9" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando viagens operacionais...</td>
               </tr>
             </tbody>
           </table>
@@ -1752,15 +1795,18 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
 
   <!-- MODAL: DETALHES COMPLETOS DA VIAGEM -->
   <div id="modal-trip-details" class="modal-overlay hidden">
-    <div class="card modal-content" style="max-width: 860px;">
+    <div class="card modal-content" style="max-width: 920px; max-height: 90vh; display: flex; flex-direction: column;">
       <div class="modal-header">
         <div class="flex items-center gap-3">
-          <div style="width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; color: #fff;">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; color: #fff;">
             <span data-lucide="navigation" class="icon-md"></span>
           </div>
           <div>
-            <h3 id="trip-detail-code" class="text-base font-bold">Viagem #</h3>
-            <p id="trip-detail-route" class="text-xs" style="color: var(--text-secondary);"></p>
+            <div class="flex items-center gap-2">
+              <h3 id="trip-detail-code" class="text-base font-bold font-mono">Viagem #</h3>
+              <span id="trip-detail-status-badge"></span>
+            </div>
+            <p id="trip-detail-route" class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;"></p>
           </div>
         </div>
         <button type="button" onclick="closeModal('modal-trip-details')" class="btn btn-secondary btn-icon" title="Fechar">
@@ -1768,20 +1814,22 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
         </button>
       </div>
 
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1;">
         
-        <!-- Status & Transition Bar -->
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
-          <div>
-            <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-muted); display: block;">Status Operacional</span>
-            <div id="trip-detail-status-badge" style="margin-top: 0.25rem;"></div>
+        <!-- Action Toolbar / Quick Dispatch / Swap Buttons -->
+        <div class="card" style="padding: 0.85rem 1.25rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Ações Operacionais:</span>
+            <div id="trip-detail-actions" class="flex items-center gap-2">
+              <!-- Dynamic Transition Buttons -->
+            </div>
           </div>
-          <div id="trip-detail-actions" class="flex items-center gap-2">
-            <!-- Dynamic Transition Buttons -->
+          <div id="trip-detail-tracking-btn-container">
+            <!-- Tracking button -->
           </div>
         </div>
 
-        <!-- Info Grid -->
+        <!-- Info Grid (Motorista, Veículo, Datas, Origem) -->
         <div class="grid-4" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
           <div>
             <span class="text-xs" style="color: var(--text-muted); display: block;">Motorista</span>
@@ -1792,35 +1840,68 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             <strong id="trip-detail-vehicle" class="text-sm font-mono">-</strong>
           </div>
           <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Início</span>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">Data Programada / Início</span>
             <strong id="trip-detail-start" class="text-sm">-</strong>
           </div>
           <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Conclusão</span>
+            <span class="text-xs" style="color: var(--text-muted); display: block;">Conclusão / Término</span>
             <strong id="trip-detail-end" class="text-sm">-</strong>
           </div>
         </div>
 
-        <!-- Paradas e Entregas -->
+        <!-- Origem & Observações -->
+        <div class="card" style="padding: 0.85rem 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.35rem;">
+          <div class="flex items-center gap-2">
+            <span data-lucide="map-pin" class="icon-xs" style="color: var(--emerald-base);"></span>
+            <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Origem da Rota:</span>
+            <span id="trip-detail-origin-full" class="text-xs font-semibold text-white">-</span>
+          </div>
+          <div id="trip-detail-notes-container" class="text-xs" style="color: var(--text-secondary); margin-top: 0.25rem;">
+            <strong>Observações:</strong> <span id="trip-detail-notes">-</span>
+          </div>
+        </div>
+
+        <!-- Paradas e Entregas com Status Individual -->
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.5rem;">Paradas e Entregas</h4>
-          <div class="table-container" style="max-height: 180px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+          <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-muted);">
+              <span data-lucide="map-pin" class="icon-xs"></span>
+              <span>Paradas / Entregas da Rota (<span id="trip-detail-stops-count">0</span>)</span>
+            </h4>
+            <span id="trip-detail-progress-badge" class="badge badge-brand text-xs">Progresso: 0/0 entregas</span>
+          </div>
+          <div class="table-container" style="max-height: 220px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
             <table>
               <thead>
                 <tr>
                   <th>Seq.</th>
                   <th>Destinatário</th>
+                  <th>Contato</th>
                   <th>Endereço / Cidade</th>
-                  <th>Peso / Volumes</th>
-                  <th>Valor (ERP)</th>
-                  <th>Status</th>
+                  <th>Volumes / Peso</th>
+                  <th>Documento / NF</th>
+                  <th>Status Entrega</th>
                 </tr>
               </thead>
               <tbody id="trip-detail-deliveries-table">
-                <tr><td colspan="6" class="text-center text-xs" style="padding: 1rem; color: var(--text-muted);">Nenhuma entrega vinculada.</td></tr>
+                <tr><td colspan="7" class="text-center text-xs" style="padding: 1rem; color: var(--text-muted);">Nenhuma parada vinculada.</td></tr>
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- Rastreamento & Telemetria em Tempo Real -->
+        <div id="trip-detail-tracking-card" class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div class="flex items-center gap-3">
+            <div style="width: 2rem; height: 2rem; border-radius: 0.5rem; background: rgba(6, 182, 212, 0.15); color: var(--cyan-base); display: flex; align-items: center; justify-content: center;">
+              <span data-lucide="activity" class="icon-sm"></span>
+            </div>
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Rastreamento & Telemetria</span>
+              <p id="trip-detail-last-location" class="text-xs font-semibold" style="margin-top: 2px;">Localização: Aguardando sinal do aplicativo do motorista...</p>
+            </div>
+          </div>
+          <div id="trip-detail-tracking-link-container"></div>
         </div>
 
         <!-- Documentos Fiscais & Romaneios -->
@@ -1853,6 +1934,456 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       <div class="modal-footer">
         <button type="button" onclick="closeModal('modal-trip-details')" class="btn btn-secondary">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA / EDITAR VIAGEM / ROTA (3 ETAPAS) -->
+  <div id="modal-trip-create" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 960px; max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div class="flex items-center gap-3">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; color: #fff;">
+            <span data-lucide="navigation" class="icon-md"></span>
+          </div>
+          <div>
+            <h3 id="modal-trip-form-title" class="text-base font-bold">Nova Viagem / Rota Operacional</h3>
+            <p class="text-xs" style="color: var(--text-secondary);">Monte as paradas, atribua motorista/veículo e despache para o app HK Connect.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-trip-create')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <!-- Stepper Navigation -->
+      <div style="display: flex; border-bottom: 1px solid var(--border-color); background: var(--bg-surface-elevated);">
+        <button type="button" id="step-tab-1" onclick="switchTripStep(1)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid var(--brand-light); background: transparent; color: var(--text-primary); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          1. Motorista & Veículo
+        </button>
+        <button type="button" id="step-tab-2" onclick="switchTripStep(2)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          2. Identificação & Origem
+        </button>
+        <button type="button" id="step-tab-3" onclick="switchTripStep(3)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          3. Paradas & Documentos (<span id="trip-step-stops-count">0</span>)
+        </button>
+      </div>
+
+      <form id="form-trip-create" onsubmit="return false;" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+        <input type="hidden" id="trip-form-id">
+
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+          
+          <!-- ============================================== -->
+          <!-- ETAPA 1: MOTORISTA & VEÍCULO -->
+          <!-- ============================================== -->
+          <div id="trip-step-1" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+              <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-muted); margin-bottom: 0.75rem;">
+                <span data-lucide="user-check" class="icon-sm" style="color: var(--brand-light);"></span>
+                <span>Seleção do Motorista e Validação Operacional</span>
+              </h4>
+
+              <div class="grid-2">
+                <div>
+                  <label>Motorista Operacional *</label>
+                  <select id="trip-form-driver" class="input-control" required onchange="handleTripDriverSelectChange()">
+                    <option value="">Selecione o motorista...</option>
+                  </select>
+                  <span class="text-xs" style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                    Apenas motoristas ATIVOS e cadastrados no sistema.
+                  </span>
+                </div>
+
+                <div>
+                  <label>Veículo Alocado *</label>
+                  <select id="trip-form-vehicle" class="input-control" required onchange="handleTripVehicleSelectChange()">
+                    <option value="">Selecione o veículo...</option>
+                  </select>
+                  <span class="text-xs" style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                    Preenchido automaticamente com o veículo atual do motorista.
+                  </span>
+                </div>
+              </div>
+
+              <!-- Driver Status / Warning Banner -->
+              <div id="trip-driver-warning-banner" class="hidden" style="margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 0.75rem; background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-base); font-size: 0.8rem; display: flex; items-center gap-2;">
+                <span data-lucide="alert-triangle" class="icon-sm" style="flex-shrink:0;"></span>
+                <span id="trip-driver-warning-text">Atenção: Motorista já possui uma viagem em andamento.</span>
+              </div>
+
+              <div id="trip-driver-info-box" class="hidden" style="margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 0.75rem; background: var(--bg-surface); border: 1px solid var(--border-color); font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                <div><strong>CPF:</strong> <span id="trip-driver-info-cpf">-</span></div>
+                <div><strong>Telefone:</strong> <span id="trip-driver-info-phone">-</span></div>
+                <div><strong>CNH:</strong> <span id="trip-driver-info-cnh">-</span></div>
+                <div><strong>RNTRC:</strong> <span id="trip-driver-info-rntrc">-</span></div>
+              </div>
+            </div>
+
+            <div class="flex justify-end">
+              <button type="button" onclick="switchTripStep(2)" class="btn btn-primary">
+                <span>Avançar para Identificação & Origem</span>
+                <span data-lucide="arrow-right" class="icon-sm"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ============================================== -->
+          <!-- ETAPA 2: IDENTIFICAÇÃO & ORIGEM -->
+          <!-- ============================================== -->
+          <div id="trip-step-2" class="hidden" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+              <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-muted); margin-bottom: 0.75rem;">
+                <span data-lucide="navigation" class="icon-sm" style="color: var(--brand-light);"></span>
+                <span>Dados de Identificação da Viagem</span>
+              </h4>
+
+              <div class="grid-3">
+                <div>
+                  <label>Código da Viagem / Rota *</label>
+                  <input type="text" id="trip-form-code" class="input-control font-mono" required placeholder="Ex: TRP-20260829-001">
+                </div>
+                <div>
+                  <label>Data Programada *</label>
+                  <input type="date" id="trip-form-date" class="input-control" required>
+                </div>
+                <div>
+                  <label>Horário Previsto</label>
+                  <input type="time" id="trip-form-time" class="input-control">
+                </div>
+              </div>
+            </div>
+
+            <!-- Origem Completa -->
+            <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+              <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-muted); margin-bottom: 0.75rem;">
+                <span data-lucide="map-pin" class="icon-sm" style="color: var(--emerald-base);"></span>
+                <span>Local de Origem / Ponto de Partida</span>
+              </h4>
+
+              <div class="grid-2" style="margin-bottom: 0.75rem;">
+                <div>
+                  <label>Nome / Identificação do Local de Origem *</label>
+                  <input type="text" id="trip-form-origin-name" class="input-control" required placeholder="Ex: CD Principal HK Connect ou Matriz SP" value="Centro de Distribuição HK">
+                </div>
+                <div>
+                  <label>CEP de Origem</label>
+                  <input type="text" id="trip-form-origin-cep" class="input-control font-mono" placeholder="01001-000" maxlength="9">
+                </div>
+              </div>
+
+              <div class="grid-3" style="margin-bottom: 0.75rem;">
+                <div style="grid-column: span 2;">
+                  <label>Endereço / Logradouro de Origem *</label>
+                  <input type="text" id="trip-form-origin-address" class="input-control" required placeholder="Ex: Av. das Nações Unidas" value="Av. das Indústrias">
+                </div>
+                <div>
+                  <label>Número *</label>
+                  <input type="text" id="trip-form-origin-number" class="input-control" required placeholder="1000" value="1000">
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <div>
+                  <label>Bairro *</label>
+                  <input type="text" id="trip-form-origin-neighborhood" class="input-control" required placeholder="Distrito Industrial" value="Distrito Industrial">
+                </div>
+                <div>
+                  <label>Cidade *</label>
+                  <input type="text" id="trip-form-origin-city" class="input-control" required placeholder="São Paulo" value="São Paulo">
+                </div>
+                <div>
+                  <label>UF *</label>
+                  <input type="text" id="trip-form-origin-state" class="input-control" required placeholder="SP" maxlength="2" style="text-transform: uppercase;" value="SP">
+                </div>
+              </div>
+            </div>
+
+            <!-- Observações Gerais -->
+            <div>
+              <label>Observações Operacionais / Instruções para o Motorista</label>
+              <textarea id="trip-form-notes" class="input-control" rows="2" placeholder="Ex: Conferir lacre no carregamento, apresentar documento na portaria..."></textarea>
+            </div>
+
+            <div class="flex justify-between items-center">
+              <button type="button" onclick="switchTripStep(1)" class="btn btn-secondary">
+                <span data-lucide="arrow-right" class="icon-sm" style="transform: rotate(180deg);"></span>
+                <span>Voltar</span>
+              </button>
+              <button type="button" onclick="switchTripStep(3)" class="btn btn-primary">
+                <span>Avançar para Montar Paradas</span>
+                <span data-lucide="arrow-right" class="icon-sm"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ============================================== -->
+          <!-- ETAPA 3: PARADAS & ENTREGAS -->
+          <!-- ============================================== -->
+          <div id="trip-step-3" class="hidden" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <!-- Stop Sub-Form (Insert / Edit Stop) -->
+            <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--brand-hover);">
+              <div class="flex items-center justify-between" style="margin-bottom: 0.75rem;">
+                <h4 id="stop-form-title" class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--brand-light);">
+                  <span data-lucide="plus-circle" class="icon-sm"></span>
+                  <span>Adicionar Parada / Entrega à Rota</span>
+                </h4>
+                <button type="button" id="btn-cancel-stop-edit" onclick="resetStopSubForm()" class="btn btn-secondary btn-sm hidden">Cancelar Edição</button>
+              </div>
+
+              <input type="hidden" id="stop-edit-index" value="-1">
+
+              <div class="grid-3" style="margin-bottom: 0.75rem;">
+                <div style="grid-column: span 2;">
+                  <label>Destinatário / Razão Social *</label>
+                  <input type="text" id="stop-form-recipient" class="input-control" placeholder="Ex: Supermercados Estrela Ltda">
+                </div>
+                <div>
+                  <label>Telefone / Contato do Recebedor</label>
+                  <input type="text" id="stop-form-phone" class="input-control" placeholder="(11) 98765-4321">
+                </div>
+              </div>
+
+              <div class="grid-4" style="margin-bottom: 0.75rem;">
+                <div style="grid-column: span 2;">
+                  <label>Endereço / Logradouro *</label>
+                  <input type="text" id="stop-form-address" class="input-control" placeholder="Ex: Rua das Flores">
+                </div>
+                <div>
+                  <label>Número *</label>
+                  <input type="text" id="stop-form-number" class="input-control" placeholder="123">
+                </div>
+                <div>
+                  <label>Complemento</label>
+                  <input type="text" id="stop-form-complement" class="input-control" placeholder="Galpão 4">
+                </div>
+              </div>
+
+              <div class="grid-4" style="margin-bottom: 0.75rem;">
+                <div>
+                  <label>Bairro *</label>
+                  <input type="text" id="stop-form-neighborhood" class="input-control" placeholder="Centro">
+                </div>
+                <div>
+                  <label>Cidade *</label>
+                  <input type="text" id="stop-form-city" class="input-control" placeholder="Campinas">
+                </div>
+                <div>
+                  <label>UF *</label>
+                  <input type="text" id="stop-form-state" class="input-control" placeholder="SP" maxlength="2" style="text-transform: uppercase;">
+                </div>
+                <div>
+                  <label>CEP</label>
+                  <input type="text" id="stop-form-cep" class="input-control font-mono" placeholder="13000-000" maxlength="9">
+                </div>
+              </div>
+
+              <div class="grid-4" style="margin-bottom: 0.75rem;">
+                <div>
+                  <label>Volumes</label>
+                  <input type="number" id="stop-form-volumes" class="input-control" placeholder="1" min="1" value="1">
+                </div>
+                <div>
+                  <label>Peso Total (kg)</label>
+                  <input type="number" id="stop-form-weight" class="input-control" placeholder="Ex: 250.5" step="0.1">
+                </div>
+                <div>
+                  <label>Número da NF / Pedido</label>
+                  <input type="text" id="stop-form-nf" class="input-control font-mono" placeholder="Ex: 001234">
+                </div>
+                <div>
+                  <label>Chave NF-e (44 dígitos)</label>
+                  <input type="text" id="stop-form-nf-key" class="input-control font-mono text-xs" placeholder="352308..." maxlength="44">
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <input type="text" id="stop-form-notes" class="input-control" placeholder="Instruções desta parada (ex: descarga das 08h às 12h)" style="flex: 1; margin-right: 1rem;">
+                <button type="button" id="btn-save-stop" onclick="handleAddOrUpdateStop()" class="btn btn-cyan" style="white-space: nowrap;">
+                  <span data-lucide="plus" class="icon-sm"></span>
+                  <span id="btn-save-stop-label">Inserir Parada</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Interactive Stops Sequence Table -->
+            <div>
+              <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+                <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--text-muted);">
+                  <span data-lucide="list" class="icon-xs"></span>
+                  <span>Sequência Ordenada de Paradas da Viagem</span>
+                </h4>
+                <span id="stops-summary-badge" class="badge badge-purple text-xs">0 paradas configuradas</span>
+              </div>
+
+              <div class="table-container" style="max-height: 250px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 50px;">Ordem</th>
+                      <th>Destinatário</th>
+                      <th>Endereço Completo</th>
+                      <th>Cidade/UF</th>
+                      <th>Volumes / Peso</th>
+                      <th>NF-e</th>
+                      <th class="text-right" style="width: 140px;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="trip-stops-table-body">
+                    <tr>
+                      <td colspan="7" class="text-center text-xs" style="padding: 1.5rem; color: var(--text-muted);">
+                        Nenhuma parada adicionada ainda. Preencha o formulário acima para inserir paradas na rota.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center">
+              <button type="button" onclick="switchTripStep(2)" class="btn btn-secondary">
+                <span data-lucide="arrow-right" class="icon-sm" style="transform: rotate(180deg);"></span>
+                <span>Voltar</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer with Actions: Salvar Rascunho / Atribuir e Despachar -->
+        <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between;">
+          <button type="button" onclick="closeModal('modal-trip-create')" class="btn btn-secondary">Cancelar</button>
+
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="submitTripForm('PENDING')" class="btn btn-secondary" id="btn-save-draft" style="border-color: var(--brand-hover);">
+              <span data-lucide="file-text" class="icon-sm"></span>
+              <span>Salvar como Rascunho</span>
+            </button>
+            <button type="button" onclick="submitTripForm('ASSIGNED')" class="btn btn-primary" id="btn-assign-dispatch" style="box-shadow: 0 4px 14px rgba(37,99,235,0.4);">
+              <span data-lucide="send" class="icon-sm"></span>
+              <span>Atribuir & Despachar ao Motorista</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: RETIRAR ATRIBUIÇÃO DA ROTA -->
+  <div id="modal-unassign-trip" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="text-base font-bold flex items-center gap-2">
+          <span data-lucide="link-2-off" class="icon-sm" style="color: var(--rose-base);"></span>
+          <span>Retirar Atribuição da Rota</span>
+        </h3>
+        <button type="button" onclick="closeModal('modal-unassign-trip')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <form id="form-unassign-trip" onsubmit="handleUnassignTripSubmit(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="unassign-trip-id">
+
+          <p class="text-xs" style="color: var(--text-secondary);">
+            A viagem <strong id="unassign-trip-code" style="color: #fff;"></strong> voltará para o status <strong>PENDENTE</strong> e deixará de aparecer na lista do motorista <strong id="unassign-driver-name" style="color: #fff;"></strong>.
+          </p>
+
+          <div>
+            <label>Motivo da Retirada de Atribuição *</label>
+            <textarea id="unassign-trip-reason" class="input-control" rows="3" required placeholder="Ex: Ajuste na escala, indisponibilidade do motorista ou manutenção do veículo..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-unassign-trip')" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-ghost-danger">Confirmar Retirada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TROCAR MOTORISTA DA ROTA -->
+  <div id="modal-reassign-trip" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="text-base font-bold flex items-center gap-2">
+          <span data-lucide="refresh-cw" class="icon-sm" style="color: var(--cyan-base);"></span>
+          <span>Trocar Motorista da Rota</span>
+        </h3>
+        <button type="button" onclick="closeModal('modal-reassign-trip')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <form id="form-reassign-trip" onsubmit="handleReassignTripSubmit(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="reassign-trip-id">
+
+          <p class="text-xs" style="color: var(--text-secondary);">
+            Transferindo a viagem <strong id="reassign-trip-code" style="color: #fff;"></strong> do motorista atual (<span id="reassign-current-driver" style="color: #fff;">-</span>) para um novo motorista.
+          </p>
+
+          <div>
+            <label>Novo Motorista *</label>
+            <select id="reassign-driver-select" class="input-control" required onchange="handleReassignDriverChange()">
+              <option value="">Selecione o novo motorista...</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Veículo *</label>
+            <select id="reassign-vehicle-select" class="input-control" required>
+              <option value="">Selecione o veículo...</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Motivo da Substituição</label>
+            <textarea id="reassign-trip-reason" class="input-control" rows="2" placeholder="Ex: Substituição por motivo de escala ou solicitação da filial..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-reassign-trip')" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-cyan">Confirmar Substituição</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CANCELAR ROTA -->
+  <div id="modal-cancel-trip" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="text-base font-bold flex items-center gap-2">
+          <span data-lucide="alert-octagon" class="icon-sm" style="color: var(--rose-base);"></span>
+          <span>Cancelar Rota / Viagem</span>
+        </h3>
+        <button type="button" onclick="closeModal('modal-cancel-trip')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <form id="form-cancel-trip" onsubmit="handleCancelTripSubmit(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="cancel-trip-id">
+
+          <p class="text-xs" style="color: var(--text-secondary);">
+            A viagem <strong id="cancel-trip-code" style="color: #fff;"></strong> será cancelada definitivamente. O motorista será notificado e as entregas serão canceladas.
+          </p>
+
+          <div>
+            <label>Motivo do Cancelamento *</label>
+            <textarea id="cancel-trip-reason" class="input-control" rows="3" required placeholder="Ex: Carga cancelada pelo cliente, problema operacional no CD, etc."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-cancel-trip')" class="btn btn-secondary">Fechar</button>
+          <button type="submit" class="btn btn-ghost-danger">Confirmar Cancelamento</button>
+        </div>
+      </form>
     </div>
   </div>
 

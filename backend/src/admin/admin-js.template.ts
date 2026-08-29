@@ -19,7 +19,10 @@ export const ADMIN_JS_TEMPLATE = `
     auditLogs: [],
     systemConfig: null,
     stats: null,
-    unlinkedDrivers: []
+    unlinkedDrivers: [],
+    tripFormStops: [],
+    tripFormStep: 1,
+    tripDateQuickFilter: 'all'
   };
 
   // LUCIDE ICONS SVG MAPPING
@@ -33,6 +36,11 @@ export const ADMIN_JS_TEMPLATE = `
     lock: '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
     eye: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
     'arrow-right': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+    'arrow-up': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>',
+    'arrow-down': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>',
+    send: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+    list: '<svg class="svg-icon" viewBox="0 0 24 24"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>',
+    plus: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
     'layout-dashboard': '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
     navigation: '<svg class="svg-icon" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>',
     'log-out': '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>',
@@ -1032,23 +1040,74 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // 4. VIAGENS CONTROLLER
+  // 4. VIAGENS / ROTAS OPERACIONAIS CONTROLLER
   // ==============================================
   async function loadTrips() {
     try {
-      const trips = await apiFetch('/api/v1/admin/trips');
-      STATE.trips = trips;
+      const [trips, drivers, vehicles] = await Promise.all([
+        apiFetch('/api/v1/admin/trips'),
+        apiFetch('/api/v1/admin/drivers').catch(() => []),
+        apiFetch('/api/v1/admin/vehicles').catch(() => [])
+      ]);
+      STATE.trips = Array.isArray(trips) ? trips : [];
+      STATE.drivers = Array.isArray(drivers) ? drivers : [];
+      STATE.vehicles = Array.isArray(vehicles) ? vehicles : [];
+
+      // Populate driver filter select
+      const driverFilterEl = document.getElementById('trip-driver-filter');
+      if (driverFilterEl) {
+        const currentVal = driverFilterEl.value;
+        const driverOptions = STATE.drivers.map(d => {
+          const name = d.user?.name || d.name || 'Motorista #' + d.id.slice(0, 5);
+          return '<option value="' + d.id + '">' + name + '</option>';
+        }).join('');
+        driverFilterEl.innerHTML = '<option value="">Todos os Motoristas</option>' + driverOptions;
+        driverFilterEl.value = currentVal;
+      }
+
       renderTripsTable();
     } catch (err) {
       showToast('Erro ao carregar viagens: ' + err.message, 'error');
     }
   }
 
+  function setTripDateQuickFilter(type) {
+    STATE.tripDateQuickFilter = type;
+    const today = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate());
+
+    const startInput = document.getElementById('trip-start-date');
+    const endInput = document.getElementById('trip-end-date');
+
+    document.querySelectorAll('#btn-quick-today, #btn-quick-tomorrow, #btn-quick-all').forEach(btn => btn.classList.remove('active'));
+
+    if (type === 'today') {
+      if (startInput) startInput.value = todayStr;
+      if (endInput) endInput.value = todayStr;
+      document.getElementById('btn-quick-today')?.classList.add('active');
+    } else if (type === 'tomorrow') {
+      if (startInput) startInput.value = tomorrowStr;
+      if (endInput) endInput.value = tomorrowStr;
+      document.getElementById('btn-quick-tomorrow')?.classList.add('active');
+    } else {
+      if (startInput) startInput.value = '';
+      if (endInput) endInput.value = '';
+      document.getElementById('btn-quick-all')?.classList.add('active');
+    }
+
+    renderTripsTable();
+  }
+
   function getTripStatusBadge(status) {
     if (status === 'IN_PROGRESS') return '<span class="badge badge-brand"><span class="spinner" style="width:8px;height:8px;"></span> EM ANDAMENTO</span>';
     if (status === 'COMPLETED') return '<span class="badge badge-success">CONCLUÍDA</span>';
-    if (status === 'ASSIGNED') return '<span class="badge badge-warning">ATRIBUÍDA</span>';
-    if (status === 'PENDING') return '<span class="badge badge-warning">PENDENTE</span>';
+    if (status === 'ASSIGNED') return '<span class="badge badge-purple">ATRIBUÍDA</span>';
+    if (status === 'PENDING') return '<span class="badge badge-warning">RASCUNHO / PENDENTE</span>';
     if (status === 'ACCEPTED') return '<span class="badge badge-cyan">ACEITA</span>';
     if (status === 'CANCELLED') return '<span class="badge badge-danger">CANCELADA</span>';
     return '<span class="badge badge-muted">' + (status || '-') + '</span>';
@@ -1060,40 +1119,81 @@ export const ADMIN_JS_TEMPLATE = `
 
     const searchTerm = (document.getElementById('trip-search-input')?.value || '').toLowerCase().trim();
     const statusFilter = document.getElementById('trip-status-filter')?.value || '';
+    const driverFilter = document.getElementById('trip-driver-filter')?.value || '';
+    const startDateFilter = document.getElementById('trip-start-date')?.value || '';
+    const endDateFilter = document.getElementById('trip-end-date')?.value || '';
 
     const filtered = STATE.trips.filter(t => {
       const matchStatus = !statusFilter || t.status === statusFilter;
-      const searchStr = (t.tripCode + ' ' + (t.origin || '') + ' ' + (t.destination || '') + ' ' + (t.driver?.user?.name || '') + ' ' + (t.vehicle?.plate || '')).toLowerCase();
+      const matchDriver = !driverFilter || t.driverId === driverFilter;
+      
+      const searchStr = (
+        (t.tripCode || '') + ' ' + 
+        (t.origin || '') + ' ' + 
+        (t.destination || '') + ' ' + 
+        (t.driver?.user?.name || t.driver?.name || '') + ' ' + 
+        (t.vehicle?.plate || '')
+      ).toLowerCase();
       const matchSearch = !searchTerm || searchStr.includes(searchTerm);
-      return matchStatus && matchSearch;
+
+      // Date filtering
+      let matchDate = true;
+      if (startDateFilter || endDateFilter) {
+        const tripDateStr = (t.startDate || t.createdAt || '').slice(0, 10);
+        if (startDateFilter && tripDateStr < startDateFilter) matchDate = false;
+        if (endDateFilter && tripDateStr > endDateFilter) matchDate = false;
+      }
+
+      return matchStatus && matchDriver && matchSearch && matchDate;
     });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhuma viagem encontrada.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">' +
+        '<div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🚚</div>' +
+        '<strong>Nenhuma viagem encontrada com os filtros selecionados.</strong><br>' +
+        '<span class="text-xs">Clique no botão superior <strong>+ NOVA VIAGEM / ROTA</strong> para criar e despachar uma rota.</span>' +
+      '</td></tr>';
       return;
     }
 
     tbody.innerHTML = filtered.map(t => {
-      const driverName = t.driver?.user?.name || 'Não atribuído';
+      const driverName = t.driver?.user?.name || t.driver?.name || '<span class="text-xs" style="color:var(--text-muted); font-style:italic;">Não atribuído</span>';
       const plate = t.vehicle?.plate ? '<span class="font-mono badge badge-cyan">' + t.vehicle.plate + '</span>' : '<span class="text-xs text-muted">Sem veículo</span>';
+      const totalDeliveries = Array.isArray(t.deliveries) ? t.deliveries.length : 0;
+      const completedDeliveries = Array.isArray(t.deliveries) ? t.deliveries.filter(d => d.status === 'DELIVERED' || d.status === 'COMPLETED').length : 0;
+      const deliveriesBadge = totalDeliveries > 0 
+        ? '<span class="badge ' + (completedDeliveries === totalDeliveries ? 'badge-success' : 'badge-brand') + ' font-mono text-xs">' + completedDeliveries + '/' + totalDeliveries + ' entregas</span>' 
+        : '<span class="text-xs text-muted">0 paradas</span>';
+
+      const lastUpdated = t.updatedAt ? formatDate(t.updatedAt) : formatDate(t.createdAt);
 
       return '<tr>' +
-        '<td><strong class="font-mono text-sm" style="color:var(--brand-light);">' + (t.tripCode || t.id.slice(0,8)) + '</strong></td>' +
+        '<td>' +
+          '<div class="flex items-center gap-1.5">' +
+            '<strong class="font-mono text-sm" style="color:var(--brand-light);">' + (t.tripCode || t.id.slice(0,8)) + '</strong>' +
+          '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="text-xs font-semibold">' + formatDate(t.startDate || t.createdAt) + '</div>' +
+        '</td>' +
         '<td><strong>' + driverName + '</strong></td>' +
         '<td>' + plate + '</td>' +
         '<td>' +
-          '<div class="text-xs"><strong>De:</strong> ' + (t.origin || '-') + '</div>' +
-          '<div class="text-xs text-muted"><strong>Para:</strong> ' + (t.destination || '-') + '</div>' +
+          '<div class="text-xs"><strong>De:</strong> ' + (t.origin || 'CD Principal') + '</div>' +
+          '<div class="text-xs text-muted"><strong>Para:</strong> ' + (t.destination || (totalDeliveries + ' Parada(s)')) + '</div>' +
         '</td>' +
+        '<td>' + deliveriesBadge + '</td>' +
         '<td>' + getTripStatusBadge(t.status) + '</td>' +
-        '<td>' +
-          '<div class="text-xs">' + formatDate(t.startDate || t.createdAt) + '</div>' +
-          (t.endDate ? '<div class="text-xs text-muted">Fim: ' + formatDate(t.endDate) + '</div>' : '') +
-        '</td>' +
+        '<td class="text-xs font-mono text-muted">' + lastUpdated + '</td>' +
         '<td class="text-right">' +
-          '<div class="flex items-center justify-end gap-1">' +
-            '<button onclick="openTripDetailsModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm">Detalhes</button>' +
-            (t.status !== 'COMPLETED' && t.status !== 'CANCELLED' ? '<button onclick="openUpdateTripStatusModal(\\'' + t.id + '\\', \\'' + (t.tripCode || '').replace(/'/g, "\\\\'") + '\\', \\'' + t.status + '\\')" class="btn btn-primary btn-sm">Status</button>' : '') +
+          '<div class="flex items-center justify-end gap-1.5">' +
+            '<button onclick="openTripDetailsModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm" title="Ver Detalhes Completos">Detalhes</button>' +
+            (t.status === 'PENDING' ? '<button onclick="handleQuickDispatchTrip(\\'' + t.id + '\\')" class="btn btn-primary btn-sm" title="Despachar para Motorista"><span data-lucide="send" class="icon-xs"></span> Despachar</button>' : '') +
+            (t.status === 'PENDING' ? '<button onclick="openEditTripModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm" title="Editar"><span data-lucide="edit-2" class="icon-xs"></span></button>' : '') +
+            (t.status === 'ASSIGNED' || t.status === 'ACCEPTED' ? '<button onclick="openReassignTripModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm" title="Trocar Motorista"><span data-lucide="refresh-cw" class="icon-xs"></span> Trocar</button>' : '') +
+            (t.status === 'ASSIGNED' || t.status === 'ACCEPTED' ? '<button onclick="openUnassignTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm" title="Retirar Atribuição"><span data-lucide="link-2-off" class="icon-xs"></span></button>' : '') +
+            (t.status !== 'COMPLETED' && t.status !== 'CANCELLED' ? '<button onclick="openCancelTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm" title="Cancelar Viagem"><span data-lucide="alert-octagon" class="icon-xs"></span></button>' : '') +
+            (t.status === 'PENDING' ? '<button onclick="handleDeleteTripDraft(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm" title="Excluir Rascunho"><span data-lucide="trash" class="icon-xs"></span></button>' : '') +
           '</div>' +
         '</td>' +
       '</tr>';
@@ -1102,48 +1202,820 @@ export const ADMIN_JS_TEMPLATE = `
     renderIcons();
   }
 
+  // ==============================================
+  // STEPPER & FORM CONTROLLER (NOVA / EDITAR VIAGEM)
+  // ==============================================
+  function switchTripStep(targetStep) {
+    // Validate required fields before advancing
+    if (targetStep > 1) {
+      const driverVal = document.getElementById('trip-form-driver')?.value;
+      const vehicleVal = document.getElementById('trip-form-vehicle')?.value;
+      if (!driverVal) {
+        showToast('Selecione um motorista operacional para continuar.', 'warning');
+        return;
+      }
+      if (!vehicleVal) {
+        showToast('Selecione o veículo alocado para a rota.', 'warning');
+        return;
+      }
+    }
+
+    if (targetStep > 2) {
+      const codeVal = document.getElementById('trip-form-code')?.value.trim();
+      const dateVal = document.getElementById('trip-form-date')?.value;
+      const originName = document.getElementById('trip-form-origin-name')?.value.trim();
+      const originAddress = document.getElementById('trip-form-origin-address')?.value.trim();
+      const originCity = document.getElementById('trip-form-origin-city')?.value.trim();
+      const originState = document.getElementById('trip-form-origin-state')?.value.trim();
+
+      if (!codeVal || !dateVal || !originName || !originAddress || !originCity || !originState) {
+        showToast('Preencha os campos obrigatórios da Identificação e Origem.', 'warning');
+        return;
+      }
+    }
+
+    STATE.tripFormStep = targetStep;
+
+    // Toggle step panes
+    [1, 2, 3].forEach(step => {
+      const pane = document.getElementById('trip-step-' + step);
+      const tab = document.getElementById('step-tab-' + step);
+      if (pane) pane.classList.toggle('hidden', step !== targetStep);
+      if (tab) {
+        if (step === targetStep) {
+          tab.style.borderBottomColor = 'var(--brand-light)';
+          tab.style.color = 'var(--text-primary)';
+        } else {
+          tab.style.borderBottomColor = 'transparent';
+          tab.style.color = 'var(--text-muted)';
+        }
+      }
+    });
+
+    renderIcons();
+  }
+
+  async function openCreateTripModal() {
+    STATE.tripFormStops = [];
+    document.getElementById('trip-form-id').value = '';
+    document.getElementById('modal-trip-form-title').innerText = 'Nova Viagem / Rota Operacional';
+
+    // Auto-generate trip code
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const dateCode = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate());
+    const randCode = Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('trip-form-code').value = 'TRP-' + dateCode + '-' + randCode;
+    document.getElementById('trip-form-date').value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    document.getElementById('trip-form-time').value = '08:00';
+    document.getElementById('trip-form-notes').value = '';
+
+    // Populate drivers
+    populateTripFormDrivers();
+    populateTripFormVehicles();
+
+    // Reset warnings and driver info
+    document.getElementById('trip-driver-warning-banner')?.classList.add('hidden');
+    document.getElementById('trip-driver-info-box')?.classList.add('hidden');
+
+    resetStopSubForm();
+    renderTripStopsTable();
+    switchTripStep(1);
+
+    openModal('modal-trip-create');
+  }
+
+  async function openEditTripModal(tripId) {
+    try {
+      const trip = await apiFetch('/api/v1/admin/trips/' + tripId);
+      document.getElementById('trip-form-id').value = trip.id;
+      document.getElementById('modal-trip-form-title').innerText = 'Editar Viagem #' + (trip.tripCode || trip.id.slice(0, 8));
+
+      populateTripFormDrivers(trip.driverId);
+      populateTripFormVehicles(trip.vehicleId);
+
+      document.getElementById('trip-form-code').value = trip.tripCode || '';
+      document.getElementById('trip-form-date').value = (trip.startDate || trip.createdAt || '').slice(0, 10);
+      document.getElementById('trip-form-time').value = '08:00';
+      document.getElementById('trip-form-notes').value = trip.notes || '';
+
+      // Set origin
+      if (trip.originAddress) {
+        document.getElementById('trip-form-origin-address').value = trip.originAddress;
+        document.getElementById('trip-form-origin-number').value = trip.originNumber || '';
+        document.getElementById('trip-form-origin-neighborhood').value = trip.originNeighborhood || '';
+        document.getElementById('trip-form-origin-city').value = trip.originCity || '';
+        document.getElementById('trip-form-origin-state').value = trip.originState || 'SP';
+        document.getElementById('trip-form-origin-cep').value = trip.originZipCode || '';
+      }
+
+      // Convert deliveries/stops to tripFormStops
+      STATE.tripFormStops = (trip.deliveries || []).map((d, index) => ({
+        id: d.id,
+        recipient: d.recipient || d.customerName || 'Destinatário',
+        phone: d.recipientPhone || d.customerPhone || '',
+        address: d.address || '',
+        numberAddress: d.numberAddress || '',
+        complement: d.complement || '',
+        neighborhood: d.neighborhood || '',
+        city: d.city || '',
+        state: d.state || 'SP',
+        zipCode: d.zipCode || '',
+        volumeCount: d.volumeCount || 1,
+        weight: d.weight || null,
+        invoiceNumber: d.invoiceNumber || '',
+        invoiceKey: d.invoiceKey || '',
+        notes: d.notes || '',
+        sequence: d.sequence || (index + 1)
+      }));
+
+      resetStopSubForm();
+      renderTripStopsTable();
+      switchTripStep(1);
+
+      openModal('modal-trip-create');
+    } catch (err) {
+      showToast('Erro ao carregar dados da viagem para edição: ' + err.message, 'error');
+    }
+  }
+
+  function populateTripFormDrivers(selectedDriverId = '') {
+    const select = document.getElementById('trip-form-driver');
+    if (!select) return;
+
+    // Filter to active drivers
+    const activeDrivers = STATE.drivers.filter(d => d.status === 'ACTIVE' || d.id === selectedDriverId);
+    
+    select.innerHTML = '<option value="">Selecione o motorista operacional...</option>' +
+      activeDrivers.map(d => {
+        const name = d.user?.name || d.name || 'Motorista #' + d.id.slice(0, 5);
+        const sel = d.id === selectedDriverId ? ' selected' : '';
+        return '<option value="' + d.id + '"' + sel + '>' + name + ' (' + (d.cpf || d.user?.phone || 'Sem CPF') + ')</option>';
+      }).join('');
+  }
+
+  function populateTripFormVehicles(selectedVehicleId = '') {
+    const select = document.getElementById('trip-form-vehicle');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Selecione o veículo alocado...</option>' +
+      STATE.vehicles.map(v => {
+        const sel = v.id === selectedVehicleId ? ' selected' : '';
+        const driverName = v.currentDriver?.user?.name ? ' - Vinculado a ' + v.currentDriver.user.name : '';
+        return '<option value="' + v.id + '"' + sel + '>' + v.plate + ' (' + (v.model || v.brand || 'Veículo') + driverName + ')</option>';
+      }).join('');
+  }
+
+  function handleTripDriverSelectChange() {
+    const driverId = document.getElementById('trip-form-driver')?.value;
+    const warningEl = document.getElementById('trip-driver-warning-banner');
+    const infoBox = document.getElementById('trip-driver-info-box');
+
+    if (!driverId) {
+      warningEl?.classList.add('hidden');
+      infoBox?.classList.add('hidden');
+      return;
+    }
+
+    const driver = STATE.drivers.find(d => d.id === driverId);
+    if (!driver) return;
+
+    // Driver details
+    if (infoBox) {
+      document.getElementById('trip-driver-info-cpf').innerText = driver.cpf || '-';
+      document.getElementById('trip-driver-info-phone').innerText = driver.user?.phone || driver.phone || '-';
+      document.getElementById('trip-driver-info-cnh').innerText = driver.cnh || driver.cnhNumber || '-';
+      document.getElementById('trip-driver-info-rntrc').innerText = driver.rntrc || '-';
+      infoBox.classList.remove('hidden');
+    }
+
+    // Auto-select linked vehicle if available
+    const linkedVehicle = STATE.vehicles.find(v => v.currentDriverId === driverId || v.driverId === driverId);
+    if (linkedVehicle) {
+      const vehSelect = document.getElementById('trip-form-vehicle');
+      if (vehSelect) vehSelect.value = linkedVehicle.id;
+    }
+
+    // Check if driver has an active trip
+    const activeTrip = STATE.trips.find(t => t.driverId === driverId && (t.status === 'IN_PROGRESS' || t.status === 'ACCEPTED' || t.status === 'ASSIGNED'));
+    if (activeTrip) {
+      if (warningEl) {
+        document.getElementById('trip-driver-warning-text').innerText = 
+          'Atenção Operacional: Este motorista já possui a rota #' + (activeTrip.tripCode || activeTrip.id.slice(0, 8)) + ' em status ' + activeTrip.status + '.';
+        warningEl.classList.remove('hidden');
+      }
+    } else {
+      warningEl?.classList.add('hidden');
+    }
+  }
+
+  function handleTripVehicleSelectChange() {
+    // Check if vehicle has an active trip
+    const vehicleId = document.getElementById('trip-form-vehicle')?.value;
+    if (!vehicleId) return;
+
+    const activeTrip = STATE.trips.find(t => t.vehicleId === vehicleId && (t.status === 'IN_PROGRESS' || t.status === 'ACCEPTED'));
+    const warningEl = document.getElementById('trip-driver-warning-banner');
+    if (activeTrip && warningEl) {
+      document.getElementById('trip-driver-warning-text').innerText = 
+        'Atenção: Este veículo já está em rota ativa na viagem #' + (activeTrip.tripCode || activeTrip.id.slice(0, 8)) + '.';
+      warningEl.classList.remove('hidden');
+    }
+  }
+
+  // ==============================================
+  // STOPS SUB-FORM MANAGEMENT
+  // ==============================================
+  function resetStopSubForm() {
+    document.getElementById('stop-edit-index').value = '-1';
+    document.getElementById('stop-form-title').innerHTML = '<span data-lucide="plus-circle" class="icon-sm"></span><span>Adicionar Parada / Entrega à Rota</span>';
+    document.getElementById('btn-save-stop-label').innerText = 'Inserir Parada';
+    document.getElementById('btn-cancel-stop-edit')?.classList.add('hidden');
+
+    document.getElementById('stop-form-recipient').value = '';
+    document.getElementById('stop-form-phone').value = '';
+    document.getElementById('stop-form-address').value = '';
+    document.getElementById('stop-form-number').value = '';
+    document.getElementById('stop-form-complement').value = '';
+    document.getElementById('stop-form-neighborhood').value = '';
+    document.getElementById('stop-form-city').value = '';
+    document.getElementById('stop-form-state').value = 'SP';
+    document.getElementById('stop-form-cep').value = '';
+    document.getElementById('stop-form-volumes').value = '1';
+    document.getElementById('stop-form-weight').value = '';
+    document.getElementById('stop-form-nf').value = '';
+    document.getElementById('stop-form-nf-key').value = '';
+    document.getElementById('stop-form-notes').value = '';
+
+    renderIcons();
+  }
+
+  function handleAddOrUpdateStop() {
+    const recipient = document.getElementById('stop-form-recipient')?.value.trim();
+    const address = document.getElementById('stop-form-address')?.value.trim();
+    const numberAddress = document.getElementById('stop-form-number')?.value.trim();
+    const neighborhood = document.getElementById('stop-form-neighborhood')?.value.trim();
+    const city = document.getElementById('stop-form-city')?.value.trim();
+    const state = (document.getElementById('stop-form-state')?.value.trim() || 'SP').toUpperCase();
+
+    if (!recipient || !address || !numberAddress || !neighborhood || !city || !state) {
+      showToast('Preencha os campos obrigatórios da parada (Destinatário, Endereço, Número, Bairro, Cidade e UF).', 'warning');
+      return;
+    }
+
+    const editIndex = parseInt(document.getElementById('stop-edit-index')?.value || '-1', 10);
+    const stopData = {
+      recipient,
+      phone: document.getElementById('stop-form-phone')?.value.trim() || '',
+      address,
+      numberAddress,
+      complement: document.getElementById('stop-form-complement')?.value.trim() || '',
+      neighborhood,
+      city,
+      state,
+      zipCode: document.getElementById('stop-form-cep')?.value.trim() || '',
+      volumeCount: parseInt(document.getElementById('stop-form-volumes')?.value || '1', 10) || 1,
+      weight: parseFloat(document.getElementById('stop-form-weight')?.value || '') || null,
+      invoiceNumber: document.getElementById('stop-form-nf')?.value.trim() || '',
+      invoiceKey: document.getElementById('stop-form-nf-key')?.value.trim() || '',
+      notes: document.getElementById('stop-form-notes')?.value.trim() || ''
+    };
+
+    if (editIndex >= 0 && editIndex < STATE.tripFormStops.length) {
+      STATE.tripFormStops[editIndex] = { ...STATE.tripFormStops[editIndex], ...stopData };
+      showToast('Parada #' + (editIndex + 1) + ' atualizada.', 'success');
+    } else {
+      stopData.sequence = STATE.tripFormStops.length + 1;
+      STATE.tripFormStops.push(stopData);
+      showToast('Parada adicionada à rota.', 'success');
+    }
+
+    resetStopSubForm();
+    renderTripStopsTable();
+  }
+
+  function editStopInList(index) {
+    const stop = STATE.tripFormStops[index];
+    if (!stop) return;
+
+    document.getElementById('stop-edit-index').value = index;
+    document.getElementById('stop-form-title').innerHTML = '<span data-lucide="edit-2" class="icon-sm"></span><span>Editando Parada #' + (index + 1) + '</span>';
+    document.getElementById('btn-save-stop-label').innerText = 'Salvar Alterações';
+    document.getElementById('btn-cancel-stop-edit')?.classList.remove('hidden');
+
+    document.getElementById('stop-form-recipient').value = stop.recipient || '';
+    document.getElementById('stop-form-phone').value = stop.phone || '';
+    document.getElementById('stop-form-address').value = stop.address || '';
+    document.getElementById('stop-form-number').value = stop.numberAddress || '';
+    document.getElementById('stop-form-complement').value = stop.complement || '';
+    document.getElementById('stop-form-neighborhood').value = stop.neighborhood || '';
+    document.getElementById('stop-form-city').value = stop.city || '';
+    document.getElementById('stop-form-state').value = stop.state || 'SP';
+    document.getElementById('stop-form-cep').value = stop.zipCode || '';
+    document.getElementById('stop-form-volumes').value = stop.volumeCount || 1;
+    document.getElementById('stop-form-weight').value = stop.weight || '';
+    document.getElementById('stop-form-nf').value = stop.invoiceNumber || '';
+    document.getElementById('stop-form-nf-key').value = stop.invoiceKey || '';
+    document.getElementById('stop-form-notes').value = stop.notes || '';
+
+    renderIcons();
+    document.getElementById('stop-form-recipient')?.focus();
+  }
+
+  function removeStopFromList(index) {
+    if (confirm('Deseja remover a parada #' + (index + 1) + ' da rota?')) {
+      STATE.tripFormStops.splice(index, 1);
+      // Re-index sequences
+      STATE.tripFormStops.forEach((s, idx) => s.sequence = idx + 1);
+      resetStopSubForm();
+      renderTripStopsTable();
+      showToast('Parada removida.', 'info');
+    }
+  }
+
+  function moveStopUp(index) {
+    if (index <= 0) return;
+    const temp = STATE.tripFormStops[index];
+    STATE.tripFormStops[index] = STATE.tripFormStops[index - 1];
+    STATE.tripFormStops[index - 1] = temp;
+    STATE.tripFormStops.forEach((s, idx) => s.sequence = idx + 1);
+    renderTripStopsTable();
+  }
+
+  function moveStopDown(index) {
+    if (index >= STATE.tripFormStops.length - 1) return;
+    const temp = STATE.tripFormStops[index];
+    STATE.tripFormStops[index] = STATE.tripFormStops[index + 1];
+    STATE.tripFormStops[index + 1] = temp;
+    STATE.tripFormStops.forEach((s, idx) => s.sequence = idx + 1);
+    renderTripStopsTable();
+  }
+
+  function renderTripStopsTable() {
+    const tbody = document.getElementById('trip-stops-table-body');
+    const badge = document.getElementById('stops-summary-badge');
+    const stepBadge = document.getElementById('trip-step-stops-count');
+
+    const count = STATE.tripFormStops.length;
+    if (badge) badge.innerText = count + ' parada(s) configurada(s)';
+    if (stepBadge) stepBadge.innerText = count;
+
+    if (!tbody) return;
+
+    if (count === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs" style="padding: 1.75rem; color: var(--text-muted);">' +
+        'Nenhuma parada adicionada ainda. Preencha o formulário acima para inserir paradas na rota.' +
+      '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = STATE.tripFormStops.map((s, index) => {
+      const fullAddress = [s.address, s.numberAddress, s.complement, s.neighborhood].filter(Boolean).join(', ');
+      const weightVol = (s.weight ? s.weight + ' kg' : '-') + ' / ' + (s.volumeCount || 1) + ' vol';
+      const nfStr = s.invoiceNumber ? '<span class="badge badge-brand font-mono text-xs">NF ' + s.invoiceNumber + '</span>' : '<span class="text-xs text-muted">-</span>';
+
+      return '<tr>' +
+        '<td>' +
+          '<div class="flex items-center gap-1">' +
+            '<span class="badge badge-cyan font-mono" style="font-size:0.75rem; padding: 2px 6px;">#' + (index + 1) + '</span>' +
+            '<div class="flex flex-col">' +
+              (index > 0 ? '<button type="button" onclick="moveStopUp(' + index + ')" class="btn btn-secondary btn-icon" style="padding:1px; height:16px; width:16px;" title="Subir"><span data-lucide="arrow-up" style="width:10px;height:10px;"></span></button>' : '') +
+              (index < count - 1 ? '<button type="button" onclick="moveStopDown(' + index + ')" class="btn btn-secondary btn-icon" style="padding:1px; height:16px; width:16px;" title="Descer"><span data-lucide="arrow-down" style="width:10px;height:10px;"></span></button>' : '') +
+            '</div>' +
+          '</div>' +
+        '</td>' +
+        '<td><strong>' + (s.recipient || '-') + '</strong></td>' +
+        '<td class="text-xs truncate" style="max-width: 220px;" title="' + fullAddress + '">' + fullAddress + '</td>' +
+        '<td class="text-xs font-semibold">' + (s.city || '-') + '/' + (s.state || 'SP') + '</td>' +
+        '<td class="text-xs font-mono">' + weightVol + '</td>' +
+        '<td>' + nfStr + '</td>' +
+        '<td class="text-right">' +
+          '<div class="flex items-center justify-end gap-1">' +
+            '<button type="button" onclick="editStopInList(' + index + ')" class="btn btn-secondary btn-sm" title="Editar Parada"><span data-lucide="edit-2" class="icon-xs"></span></button>' +
+            '<button type="button" onclick="removeStopFromList(' + index + ')" class="btn btn-ghost-danger btn-sm" title="Remover Parada"><span data-lucide="trash" class="icon-xs"></span></button>' +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    renderIcons();
+  }
+
+  // ==============================================
+  // SUBMISSION: SALVAR RASCUNHO OU ATRIBUIR & DESPACHAR
+  // ==============================================
+  async function submitTripForm(desiredStatus = 'PENDING') {
+    const tripId = document.getElementById('trip-form-id')?.value;
+    const driverId = document.getElementById('trip-form-driver')?.value;
+    const vehicleId = document.getElementById('trip-form-vehicle')?.value;
+    const tripCode = document.getElementById('trip-form-code')?.value.trim();
+    const dateStr = document.getElementById('trip-form-date')?.value;
+    const timeStr = document.getElementById('trip-form-time')?.value || '08:00';
+    const notes = document.getElementById('trip-form-notes')?.value.trim();
+
+    // Origin
+    const originName = document.getElementById('trip-form-origin-name')?.value.trim() || 'Centro de Distribuição HK';
+    const originAddress = document.getElementById('trip-form-origin-address')?.value.trim();
+    const originNumber = document.getElementById('trip-form-origin-number')?.value.trim();
+    const originNeighborhood = document.getElementById('trip-form-origin-neighborhood')?.value.trim();
+    const originCity = document.getElementById('trip-form-origin-city')?.value.trim();
+    const originState = (document.getElementById('trip-form-origin-state')?.value.trim() || 'SP').toUpperCase();
+    const originZipCode = document.getElementById('trip-form-origin-cep')?.value.trim();
+
+    // Validation
+    if (!tripCode) {
+      showToast('Informe o código da viagem/rota.', 'warning');
+      switchTripStep(2);
+      return;
+    }
+    if (!dateStr) {
+      showToast('Informe a data programada da viagem.', 'warning');
+      switchTripStep(2);
+      return;
+    }
+
+    if (desiredStatus === 'ASSIGNED') {
+      if (!driverId) {
+        showToast('Para despachar a rota, selecione o motorista na Etapa 1.', 'warning');
+        switchTripStep(1);
+        return;
+      }
+      if (!vehicleId) {
+        showToast('Para despachar a rota, selecione o veículo na Etapa 1.', 'warning');
+        switchTripStep(1);
+        return;
+      }
+    }
+
+    if (STATE.tripFormStops.length === 0) {
+      showToast('Adicione pelo menos 1 parada/entrega na Etapa 3 antes de salvar.', 'warning');
+      switchTripStep(3);
+      return;
+    }
+
+    const payload = {
+      tripCode,
+      driverId: driverId || undefined,
+      vehicleId: vehicleId || undefined,
+      startDate: dateStr ? new Date(dateStr + 'T' + timeStr + ':00.000Z').toISOString() : undefined,
+      origin: originName,
+      originAddress,
+      originNumber,
+      originNeighborhood,
+      originCity,
+      originState,
+      originZipCode,
+      destination: STATE.tripFormStops.length > 0 ? (STATE.tripFormStops[STATE.tripFormStops.length - 1].city + '/' + STATE.tripFormStops[STATE.tripFormStops.length - 1].state) : undefined,
+      notes: notes || undefined,
+      status: desiredStatus,
+      deliveries: STATE.tripFormStops.map((s, idx) => ({
+        recipient: s.recipient,
+        recipientPhone: s.phone || undefined,
+        address: s.address,
+        numberAddress: s.numberAddress,
+        complement: s.complement || undefined,
+        neighborhood: s.neighborhood,
+        city: s.city,
+        state: s.state,
+        zipCode: s.zipCode || undefined,
+        volumeCount: s.volumeCount || 1,
+        weight: s.weight || undefined,
+        invoiceNumber: s.invoiceNumber || undefined,
+        invoiceKey: s.invoiceKey || undefined,
+        notes: s.notes || undefined,
+        sequence: idx + 1
+      }))
+    };
+
+    try {
+      if (tripId) {
+        await apiFetch('/api/v1/admin/trips/' + tripId, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        showToast('Viagem #' + tripCode + ' atualizada com sucesso!', 'success');
+      } else {
+        await apiFetch('/api/v1/admin/trips', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const msg = desiredStatus === 'ASSIGNED' 
+          ? 'Viagem #' + tripCode + ' criada e despachada para o motorista com sucesso!' 
+          : 'Viagem #' + tripCode + ' salva como rascunho com sucesso!';
+        showToast(msg, 'success');
+      }
+
+      closeModal('modal-trip-create');
+      await loadTrips();
+    } catch (err) {
+      showToast('Erro ao salvar viagem: ' + err.message, 'error');
+    }
+  }
+
+  // Quick Dispatch directly from table or details
+  async function handleQuickDispatchTrip(tripId) {
+    const trip = STATE.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    if (!trip.driverId || !trip.vehicleId) {
+      // Open edit modal on step 1 to assign
+      openEditTripModal(tripId);
+      showToast('Selecione o motorista e o veículo antes de despachar a rota.', 'info');
+      return;
+    }
+
+    if (confirm('Deseja despachar a viagem #' + (trip.tripCode || trip.id.slice(0, 8)) + ' para o motorista ' + (trip.driver?.user?.name || 'atribuído') + '?')) {
+      try {
+        await apiFetch('/api/v1/admin/trips/' + tripId + '/assign', {
+          method: 'POST',
+          body: JSON.stringify({
+            driverId: trip.driverId,
+            vehicleId: trip.vehicleId
+          })
+        });
+        showToast('Viagem despachada com sucesso! Notificação enviada ao motorista.', 'success');
+        await loadTrips();
+      } catch (err) {
+        showToast('Erro ao despachar viagem: ' + err.message, 'error');
+      }
+    }
+  }
+
+  // ==============================================
+  // UNASSIGN, REASSIGN, CANCEL & DELETE HANDLERS
+  // ==============================================
+  function openUnassignTripModal(tripId) {
+    const trip = STATE.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    document.getElementById('unassign-trip-id').value = trip.id;
+    document.getElementById('unassign-trip-code').innerText = trip.tripCode || trip.id.slice(0, 8);
+    document.getElementById('unassign-driver-name').innerText = trip.driver?.user?.name || trip.driver?.name || 'Motorista';
+    document.getElementById('unassign-trip-reason').value = '';
+
+    openModal('modal-unassign-trip');
+  }
+
+  async function handleUnassignTripSubmit(e) {
+    if (e) e.preventDefault();
+    const tripId = document.getElementById('unassign-trip-id')?.value;
+    const reason = document.getElementById('unassign-trip-reason')?.value.trim();
+
+    if (!tripId || !reason) {
+      showToast('Informe o motivo da retirada de atribuição.', 'warning');
+      return;
+    }
+
+    try {
+      await apiFetch('/api/v1/admin/trips/' + tripId + '/unassign', {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+      showToast('Atribuição da rota retirada com sucesso. A viagem voltou para PENDENTE.', 'success');
+      closeModal('modal-unassign-trip');
+      closeModal('modal-trip-details');
+      await loadTrips();
+    } catch (err) {
+      showToast('Erro ao retirar atribuição: ' + err.message, 'error');
+    }
+  }
+
+  function openReassignTripModal(tripId) {
+    const trip = STATE.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    document.getElementById('reassign-trip-id').value = trip.id;
+    document.getElementById('reassign-trip-code').innerText = trip.tripCode || trip.id.slice(0, 8);
+    document.getElementById('reassign-current-driver').innerText = trip.driver?.user?.name || trip.driver?.name || 'Não vinculado';
+    document.getElementById('reassign-trip-reason').value = '';
+
+    const driverSelect = document.getElementById('reassign-driver-select');
+    const vehicleSelect = document.getElementById('reassign-vehicle-select');
+
+    if (driverSelect) {
+      const activeDrivers = STATE.drivers.filter(d => d.status === 'ACTIVE' && d.id !== trip.driverId);
+      driverSelect.innerHTML = '<option value="">Selecione o novo motorista...</option>' +
+        activeDrivers.map(d => '<option value="' + d.id + '">' + (d.user?.name || d.name) + ' (' + (d.cpf || 'Ativo') + ')</option>').join('');
+    }
+
+    if (vehicleSelect) {
+      vehicleSelect.innerHTML = '<option value="">Selecione o veículo...</option>' +
+        STATE.vehicles.map(v => {
+          const sel = v.id === trip.vehicleId ? ' selected' : '';
+          return '<option value="' + v.id + '"' + sel + '>' + v.plate + ' (' + (v.model || 'Veículo') + ')</option>';
+        }).join('');
+    }
+
+    openModal('modal-reassign-trip');
+  }
+
+  function handleReassignDriverChange() {
+    const driverId = document.getElementById('reassign-driver-select')?.value;
+    if (!driverId) return;
+
+    const linkedVeh = STATE.vehicles.find(v => v.currentDriverId === driverId || v.driverId === driverId);
+    if (linkedVeh) {
+      const vehSelect = document.getElementById('reassign-vehicle-select');
+      if (vehSelect) vehSelect.value = linkedVeh.id;
+    }
+  }
+
+  async function handleReassignTripSubmit(e) {
+    if (e) e.preventDefault();
+    const tripId = document.getElementById('reassign-trip-id')?.value;
+    const newDriverId = document.getElementById('reassign-driver-select')?.value;
+    const newVehicleId = document.getElementById('reassign-vehicle-select')?.value;
+    const reason = document.getElementById('reassign-trip-reason')?.value.trim();
+
+    if (!tripId || !newDriverId || !newVehicleId) {
+      showToast('Selecione o novo motorista e o veículo.', 'warning');
+      return;
+    }
+
+    try {
+      await apiFetch('/api/v1/admin/trips/' + tripId + '/reassign', {
+        method: 'POST',
+        body: JSON.stringify({
+          driverId: newDriverId,
+          vehicleId: newVehicleId,
+          reason: reason || undefined
+        })
+      });
+      showToast('Motorista da rota substituído com sucesso!', 'success');
+      closeModal('modal-reassign-trip');
+      closeModal('modal-trip-details');
+      await loadTrips();
+    } catch (err) {
+      showToast('Erro ao trocar motorista: ' + err.message, 'error');
+    }
+  }
+
+  function openCancelTripModal(tripId) {
+    const trip = STATE.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    document.getElementById('cancel-trip-id').value = trip.id;
+    document.getElementById('cancel-trip-code').innerText = trip.tripCode || trip.id.slice(0, 8);
+    document.getElementById('cancel-trip-reason').value = '';
+
+    openModal('modal-cancel-trip');
+  }
+
+  async function handleCancelTripSubmit(e) {
+    if (e) e.preventDefault();
+    const tripId = document.getElementById('cancel-trip-id')?.value;
+    const reason = document.getElementById('cancel-trip-reason')?.value.trim();
+
+    if (!tripId || !reason) {
+      showToast('Informe o motivo do cancelamento da rota.', 'warning');
+      return;
+    }
+
+    try {
+      await apiFetch('/api/v1/admin/trips/' + tripId + '/cancel', {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+      showToast('Viagem cancelada com sucesso.', 'info');
+      closeModal('modal-cancel-trip');
+      closeModal('modal-trip-details');
+      await loadTrips();
+    } catch (err) {
+      showToast('Erro ao cancelar viagem: ' + err.message, 'error');
+    }
+  }
+
+  async function handleDeleteTripDraft(tripId) {
+    const trip = STATE.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    if (confirm('Deseja excluir definitivamente este rascunho de viagem #' + (trip.tripCode || trip.id.slice(0, 8)) + '?')) {
+      try {
+        await apiFetch('/api/v1/admin/trips/' + tripId, {
+          method: 'DELETE'
+        });
+        showToast('Rascunho de viagem excluído com sucesso.', 'info');
+        await loadTrips();
+      } catch (err) {
+        showToast('Erro ao excluir rascunho: ' + err.message, 'error');
+      }
+    }
+  }
+
+  // ==============================================
   // DETALHES COMPLETOS DA VIAGEM
+  // ==============================================
   async function openTripDetailsModal(tripId) {
     try {
       const t = await apiFetch('/api/v1/admin/trips/' + tripId);
       document.getElementById('trip-detail-code').innerText = 'Viagem #' + (t.tripCode || t.id.slice(0, 8));
-      document.getElementById('trip-detail-route').innerText = (t.origin || 'Origem') + ' &rarr; ' + (t.destination || 'Destino');
+      document.getElementById('trip-detail-route').innerText = (t.origin || 'Origem') + ' \u2192 ' + (t.destination || 'Destino');
       document.getElementById('trip-detail-status-badge').innerHTML = getTripStatusBadge(t.status);
 
       // Status actions bar
       const actionsEl = document.getElementById('trip-detail-actions');
+      const trackingBtnContainer = document.getElementById('trip-detail-tracking-btn-container');
+
       if (t.status === 'COMPLETED' || t.status === 'CANCELLED') {
-        actionsEl.innerHTML = '<span class="text-xs text-muted">Viagem em estado final (' + t.status + '). Não permite alterações.</span>';
-      } else {
-        actionsEl.innerHTML = '<button onclick="openUpdateTripStatusModal(\\'' + t.id + '\\', \\'' + (t.tripCode || '').replace(/'/g, "\\\\'") + '\\', \\'' + t.status + '\\')" class="btn btn-primary btn-sm">Alterar Status Operacional</button>';
+        actionsEl.innerHTML = '<span class="text-xs text-muted">Viagem em estado final (' + t.status + '). Não permite alterações operacionais.</span>';
+      } else if (t.status === 'PENDING') {
+        actionsEl.innerHTML = 
+          '<button onclick="handleQuickDispatchTrip(\\'' + t.id + '\\')" class="btn btn-primary btn-sm"><span data-lucide="send" class="icon-xs"></span> Despachar ao Motorista</button>' +
+          '<button onclick="closeModal(\\'modal-trip-details\\'); openEditTripModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm"><span data-lucide="edit-2" class="icon-xs"></span> Editar Rota</button>' +
+          '<button onclick="openCancelTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm">Cancelar Viagem</button>';
+      } else if (t.status === 'ASSIGNED' || t.status === 'ACCEPTED') {
+        actionsEl.innerHTML = 
+          '<button onclick="openReassignTripModal(\\'' + t.id + '\\')" class="btn btn-cyan btn-sm"><span data-lucide="refresh-cw" class="icon-xs"></span> Trocar Motorista</button>' +
+          '<button onclick="openUnassignTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm"><span data-lucide="link-2-off" class="icon-xs"></span> Retirar Atribuição</button>' +
+          '<button onclick="closeModal(\\'modal-trip-details\\'); openEditTripModal(\\'' + t.id + '\\')" class="btn btn-secondary btn-sm"><span data-lucide="edit-2" class="icon-xs"></span> Editar</button>' +
+          '<button onclick="openCancelTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm">Cancelar</button>';
+      } else if (t.status === 'IN_PROGRESS') {
+        actionsEl.innerHTML = 
+          '<button onclick="openUpdateTripStatusModal(\\'' + t.id + '\\', \\'' + (t.tripCode || '').replace(/'/g, "\\\\'") + '\\', \\'' + t.status + '\\')" class="btn btn-primary btn-sm">Finalizar / Concluir Viagem</button>' +
+          '<button onclick="openCancelTripModal(\\'' + t.id + '\\')" class="btn btn-ghost-danger btn-sm">Cancelar</button>';
       }
 
-      document.getElementById('trip-detail-driver').innerText = t.driver?.user?.name || 'Não vinculado';
+      if (trackingBtnContainer) {
+        if (t.vehicleId || t.driverId) {
+          trackingBtnContainer.innerHTML = '<button onclick="closeModal(\\'modal-trip-details\\'); navigate(\\'tracking\\')" class="btn btn-secondary btn-sm" style="color:var(--cyan-base);"><span data-lucide="activity" class="icon-xs"></span> Ver no Mapa de Rastreamento</button>';
+        } else {
+          trackingBtnContainer.innerHTML = '';
+        }
+      }
+
+      document.getElementById('trip-detail-driver').innerText = t.driver?.user?.name || t.driver?.name || 'Não vinculado';
       document.getElementById('trip-detail-vehicle').innerText = t.vehicle ? t.vehicle.plate + ' (' + (t.vehicle.model || '') + ')' : 'Não vinculado';
-      document.getElementById('trip-detail-start').innerText = formatDate(t.startDate || t.acceptedAt);
+      document.getElementById('trip-detail-start').innerText = formatDate(t.startDate || t.acceptedAt || t.createdAt);
       document.getElementById('trip-detail-end').innerText = formatDate(t.endDate);
 
-      // Deliveries table
+      // Full origin
+      const originFullParts = [t.origin, t.originAddress, t.originNumber, t.originNeighborhood, t.originCity, t.originState].filter(Boolean);
+      document.getElementById('trip-detail-origin-full').innerText = originFullParts.length > 0 ? originFullParts.join(', ') : (t.origin || 'Centro de Distribuição HK');
+
+      // Notes
+      const notesEl = document.getElementById('trip-detail-notes');
+      if (notesEl) notesEl.innerText = t.notes || 'Nenhuma instrução específica informada.';
+
+      // Deliveries table with individual statuses
       const delTbody = document.getElementById('trip-detail-deliveries-table');
+      const deliveries = t.deliveries || [];
+      const stopsCountEl = document.getElementById('trip-detail-stops-count');
+      const progressBadge = document.getElementById('trip-detail-progress-badge');
+
+      if (stopsCountEl) stopsCountEl.innerText = deliveries.length;
+      if (progressBadge) {
+        const completed = deliveries.filter(d => d.status === 'DELIVERED' || d.status === 'COMPLETED').length;
+        progressBadge.innerText = 'Progresso: ' + completed + '/' + deliveries.length + ' entregas concluídas';
+      }
+
       if (delTbody) {
-        const deliveries = t.deliveries || [];
         if (deliveries.length === 0) {
-          delTbody.innerHTML = '<tr><td colspan="6" class="text-center text-xs" style="padding:1rem; color:var(--text-muted);">Nenhuma entrega associada no manifesto.</td></tr>';
+          delTbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs" style="padding:1.5rem; color:var(--text-muted);">Nenhuma parada associada a esta rota.</td></tr>';
         } else {
           delTbody.innerHTML = deliveries.map((d, i) => {
             const seq = d.sequence || (i + 1);
             const address = [d.address, d.numberAddress, d.neighborhood, d.city, d.state].filter(Boolean).join(', ');
             const weightVol = (d.weight ? d.weight + ' kg' : '-') + ' / ' + (d.volumeCount || 1) + ' vol';
-            const valueStr = formatCurrency(d.value);
+            const nfStr = d.invoiceNumber ? '<span class="badge badge-brand font-mono text-xs">NF ' + d.invoiceNumber + '</span>' : (d.invoiceKey ? '<span class="badge badge-brand font-mono text-xs">NF ' + d.invoiceKey.slice(-8) + '</span>' : '-');
+            const contactStr = d.recipientPhone || d.customerPhone || '-';
+
+            let statusBadge = '<span class="badge badge-warning text-xs">PENDENTE</span>';
+            if (d.status === 'DELIVERED' || d.status === 'COMPLETED') {
+              statusBadge = '<span class="badge badge-success text-xs">ENTREGUE</span>';
+            } else if (d.status === 'IN_TRANSIT') {
+              statusBadge = '<span class="badge badge-brand text-xs">EM TRÂNSITO</span>';
+            } else if (d.status === 'FAILED' || d.status === 'OCCURRENCE') {
+              statusBadge = '<span class="badge badge-danger text-xs">OCORRÊNCIA</span>';
+            }
+
             return '<tr>' +
-              '<td><strong class="font-mono text-xs">#' + seq + '</strong></td>' +
-              '<td><strong>' + (d.recipient || d.customerName || 'Cliente') + '</strong></td>' +
+              '<td><strong class="font-mono text-xs badge badge-cyan">#' + seq + '</strong></td>' +
+              '<td><strong>' + (d.recipient || d.customerName || 'Destinatário') + '</strong></td>' +
+              '<td class="text-xs font-mono">' + contactStr + '</td>' +
               '<td class="text-xs truncate" style="max-width:200px;" title="' + address + '">' + address + '</td>' +
               '<td class="text-xs font-mono">' + weightVol + '</td>' +
-              '<td class="text-xs font-mono" style="color:var(--emerald-base);">' + valueStr + '</td>' +
-              '<td><span class="badge badge-muted text-xs">' + d.status + '</span></td>' +
+              '<td class="text-xs">' + nfStr + '</td>' +
+              '<td>' + statusBadge + '</td>' +
             '</tr>';
           }).join('');
+        }
+      }
+
+      // Tracking info
+      const trackingLocEl = document.getElementById('trip-detail-last-location');
+      const trackingLinkEl = document.getElementById('trip-detail-tracking-link-container');
+      if (trackingLocEl) {
+        if (t.status === 'IN_PROGRESS') {
+          trackingLocEl.innerText = 'Em trânsito com motorista ' + (t.driver?.user?.name || 'ativo') + '. Telemetria ativa via aplicativo HK Connect.';
+          if (trackingLinkEl) {
+            trackingLinkEl.innerHTML = '<button onclick="closeModal(\\'modal-trip-details\\'); navigate(\\'tracking\\')" class="btn btn-cyan btn-sm"><span data-lucide="map-pin" class="icon-xs"></span> Rastrear em Tempo Real</button>';
+          }
+        } else if (t.status === 'COMPLETED') {
+          trackingLocEl.innerText = 'Viagem concluída em ' + formatDate(t.endDate) + '. Rastreamento finalizado.';
+          if (trackingLinkEl) trackingLinkEl.innerHTML = '';
+        } else {
+          trackingLocEl.innerText = 'Status: ' + t.status + '. Aguardando início do deslocamento pelo motorista.';
+          if (trackingLinkEl) trackingLinkEl.innerHTML = '';
         }
       }
 
@@ -1201,6 +2073,7 @@ export const ADMIN_JS_TEMPLATE = `
       }
 
       openModal('modal-trip-details');
+      renderIcons();
     } catch (err) {
       showToast('Erro ao carregar detalhes da viagem: ' + err.message, 'error');
     }
@@ -1253,7 +2126,7 @@ export const ADMIN_JS_TEMPLATE = `
       showToast('Status da viagem atualizado para ' + status, 'success');
       closeModal('modal-trip-status');
       closeModal('modal-trip-details');
-      refreshCurrentView();
+      await loadTrips();
     } catch (err) {
       showToast('Erro ao atualizar status da viagem: ' + err.message, 'error');
     }

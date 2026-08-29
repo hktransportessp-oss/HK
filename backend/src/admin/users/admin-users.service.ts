@@ -1087,6 +1087,19 @@ export class AdminUsersService {
           },
         },
         vehicle: true,
+        deliveries: {
+          select: {
+            id: true,
+            status: true,
+            sequence: true,
+            recipient: true,
+            city: true,
+            state: true,
+            volumeCount: true,
+            weight: true,
+          },
+          orderBy: { sequence: 'asc' },
+        },
         _count: {
           select: {
             stops: true,
@@ -1144,6 +1157,613 @@ export class AdminUsersService {
     }
 
     return trip;
+  }
+
+  async createAdminTrip(dto: any, actor?: { id: string }) {
+    // 1. Gera ou valida tripCode
+    let tripCode = dto.tripCode?.trim();
+    if (!tripCode) {
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      tripCode = `TRP-${dateStr}-${rand}`;
+    }
+
+    const existingTrip = await this.prisma.trip.findUnique({ where: { tripCode } });
+    if (existingTrip) {
+      throw new ConflictException(`Já existe uma viagem com o código ${tripCode}`);
+    }
+
+    // 2. Validação de Motorista e Veículo
+    let driverId = dto.driverId || null;
+    let vehicleId = dto.vehicleId || null;
+
+    if (driverId) {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: driverId },
+        include: {
+          user: true,
+          assignments: { where: { isCurrent: true }, include: { vehicle: true }, take: 1 },
+        },
+      });
+      if (!driver) {
+        throw new NotFoundException('Motorista selecionado não foi encontrado.');
+      }
+      if (driver.status === 'BLOQUEADO' || driver.user?.status === 'BLOCKED' || driver.user?.status === 'INACTIVE') {
+        throw new BadRequestException('Motorista selecionado está bloqueado ou inativo.');
+      }
+      // Se não especificou veículo, tenta obter o veículo ativo do motorista
+      if (!vehicleId && driver.assignments && driver.assignments.length > 0) {
+        vehicleId = driver.assignments[0].vehicleId;
+      }
+    }
+
+    if (vehicleId) {
+      const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+      if (!vehicle) {
+        throw new NotFoundException('Veículo selecionado não foi encontrado.');
+      }
+      if (vehicle.status === 'INATIVO') {
+        throw new BadRequestException('Veículo selecionado está inativo na frota.');
+      }
+    }
+
+    // 3. Validação de Origem e Paradas
+    const origin = dto.origin?.trim();
+    if (!origin) {
+      throw new BadRequestException('O local de origem da rota é obrigatório.');
+    }
+
+    const rawStops = Array.isArray(dto.stops) ? dto.stops : [];
+    const isAssignAction = dto.action === 'ASSIGN' || dto.status === 'ASSIGNED';
+
+    if (isAssignAction) {
+      if (!driverId) {
+        throw new BadRequestException('Para despachar a viagem ao motorista, a seleção de um motorista ativo é obrigatória.');
+      }
+      if (!vehicleId) {
+        throw new BadRequestException('Para despachar a viagem ao motorista, a seleção de um veículo é obrigatória.');
+      }
+      if (rawStops.length === 0) {
+        throw new BadRequestException('Para despachar a viagem, adicione pelo menos uma parada / entrega.');
+      }
+    }
+
+    // Calcula destino a partir das paradas ou fallback
+    let destination = dto.destination?.trim();
+    if (!destination && rawStops.length > 0) {
+      const lastStop = rawStops[rawStops.length - 1];
+      destination = `${lastStop.recipient || 'Entrega'} - ${lastStop.city || 'Destino'}/${lastStop.state || 'SP'}`;
+    } else if (!destination) {
+      destination = 'A DEFINIR';
+    }
+
+    const finalStatus: TripStatus = isAssignAction ? TripStatus.ASSIGNED : TripStatus.PENDING;
+
+    // Monta notas operacionais
+    let notes = dto.notes?.trim() || '';
+    if (dto.scheduledDate || dto.scheduledTime) {
+      const sched = `[PROGRAMADA: ${dto.scheduledDate || ''} ${dto.scheduledTime || ''}]`.trim();
+      notes = notes ? `${sched} ${notes}` : sched;
+    }
+
+    // 4. Executa transação de criação
+    const createdTrip = await this.prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.create({
+        data: {
+          tripCode,
+          origin,
+          destination,
+          notes: notes || null,
+          driverId,
+          vehicleId,
+          status: finalStatus,
+          startDate: dto.scheduledDate ? new Date(dto.scheduledDate) : null,
+        },
+      });
+
+      // Criação das paradas e entregas
+      for (let i = 0; i < rawStops.length; i++) {
+        const stop = rawStops[i];
+        const sequence = i + 1;
+        const recipient = stop.recipient?.trim() || `Parada #${sequence}`;
+        const address = stop.address?.trim() || '';
+        const numberAddress = stop.numberAddress?.trim() || null;
+        const complement = stop.complement?.trim() || null;
+        const neighborhood = stop.neighborhood?.trim() || null;
+        const city = stop.city?.trim() || 'São Paulo';
+        const state = stop.state?.trim() || 'SP';
+        const postalCode = stop.postalCode?.trim() || null;
+        const fullAddress = [address, numberAddress, neighborhood, city, state].filter(Boolean).join(', ');
+
+        // TripStop
+        await tx.tripStop.create({
+          data: {
+            tripId: trip.id,
+            stopOrder: sequence,
+            locationName: recipient,
+            address: fullAddress || address || 'Endereço não informado',
+            status: 'PENDING',
+          },
+        });
+
+        // Delivery
+        const delivery = await tx.delivery.create({
+          data: {
+            tripId: trip.id,
+            recipient,
+            recipientDocument: stop.recipientDocument?.trim() || null,
+            address: address || 'Endereço não informado',
+            numberAddress,
+            complement,
+            neighborhood,
+            city,
+            state,
+            postalCode,
+            sequence,
+            status: DeliveryStatus.PENDING,
+            volumeCount: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+            weight: Number(stop.weight) >= 0 ? Number(stop.weight) : 0,
+            value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
+            quantityExpected: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+            notes: stop.notes?.trim() || null,
+            observations: stop.phone ? `Contato: ${stop.phone}` : null,
+          },
+        });
+
+        // Se informou dados de Nota Fiscal operacional
+        if (stop.invoiceNumber?.trim()) {
+          const invoiceNum = stop.invoiceNumber.trim();
+          const accessKey = stop.invoiceAccessKey?.trim() || 
+            `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.padStart(9, '0')}`;
+
+          await tx.invoice.create({
+            data: {
+              number: invoiceNum,
+              accessKey,
+              tripId: trip.id,
+              deliveryId: delivery.id,
+              recipient,
+              recipientDocument: stop.recipientDocument?.trim() || null,
+              address: address || 'Endereço não informado',
+              numberAddress,
+              complement,
+              neighborhood,
+              city,
+              state,
+              postalCode,
+              volumeCount: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+              weight: Number(stop.weight) >= 0 ? Number(stop.weight) : 0,
+              value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
+              status: InvoiceStatus.PENDING,
+            },
+          });
+        }
+      }
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: finalStatus === TripStatus.ASSIGNED ? 'TRIP_ASSIGNED' : 'TRIP_CREATED',
+        metadata: {
+          tripId: trip.id,
+          tripCode: trip.tripCode,
+          driverId,
+          vehicleId,
+          stopsCount: rawStops.length,
+          status: finalStatus,
+        },
+        prismaClient: tx,
+      });
+
+      return trip;
+    });
+
+    return this.getAdminTripById(createdTrip.id);
+  }
+
+  async updateAdminTrip(id: string, dto: any, actor?: { id: string }) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { driver: true, vehicle: true },
+    });
+    if (!trip) {
+      throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+    }
+
+    if (trip.status === TripStatus.IN_PROGRESS || trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Não é permitido alterar a estrutura de uma rota em andamento ou concluída.');
+    }
+
+    let driverId = dto.driverId !== undefined ? (dto.driverId || null) : trip.driverId;
+    let vehicleId = dto.vehicleId !== undefined ? (dto.vehicleId || null) : trip.vehicleId;
+
+    if (driverId) {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: driverId },
+        include: { user: true, assignments: { where: { isCurrent: true } } },
+      });
+      if (!driver) throw new NotFoundException('Motorista não encontrado');
+      if (driver.status === 'BLOQUEADO' || driver.user?.status === 'BLOCKED' || driver.user?.status === 'INACTIVE') {
+        throw new BadRequestException('Motorista selecionado está inativo ou bloqueado.');
+      }
+      if (!vehicleId && driver.assignments && driver.assignments.length > 0) {
+        vehicleId = driver.assignments[0].vehicleId;
+      }
+    }
+
+    if (vehicleId) {
+      const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+      if (!vehicle) throw new NotFoundException('Veículo não encontrado');
+      if (vehicle.status === 'INATIVO') throw new BadRequestException('Veículo está inativo na frota.');
+    }
+
+    const origin = dto.origin !== undefined ? dto.origin.trim() : trip.origin;
+    let destination = dto.destination !== undefined ? dto.destination.trim() : trip.destination;
+
+    const rawStops = Array.isArray(dto.stops) ? dto.stops : null;
+    if (rawStops && rawStops.length > 0 && (!dto.destination || !dto.destination.trim())) {
+      const lastStop = rawStops[rawStops.length - 1];
+      destination = `${lastStop.recipient || 'Entrega'} - ${lastStop.city || 'Destino'}/${lastStop.state || 'SP'}`;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.trip.update({
+        where: { id },
+        data: {
+          origin,
+          destination,
+          notes: dto.notes !== undefined ? (dto.notes?.trim() || null) : trip.notes,
+          driverId,
+          vehicleId,
+          startDate: dto.scheduledDate ? new Date(dto.scheduledDate) : trip.startDate,
+        },
+      });
+
+      // Se passou array de paradas, atualiza toda a cadeia de paradas/entregas
+      if (rawStops) {
+        await tx.invoice.deleteMany({ where: { tripId: id } });
+        await tx.delivery.deleteMany({ where: { tripId: id } });
+        await tx.tripStop.deleteMany({ where: { tripId: id } });
+
+        for (let i = 0; i < rawStops.length; i++) {
+          const stop = rawStops[i];
+          const sequence = i + 1;
+          const recipient = stop.recipient?.trim() || `Parada #${sequence}`;
+          const address = stop.address?.trim() || '';
+          const numberAddress = stop.numberAddress?.trim() || null;
+          const complement = stop.complement?.trim() || null;
+          const neighborhood = stop.neighborhood?.trim() || null;
+          const city = stop.city?.trim() || 'São Paulo';
+          const state = stop.state?.trim() || 'SP';
+          const postalCode = stop.postalCode?.trim() || null;
+          const fullAddress = [address, numberAddress, neighborhood, city, state].filter(Boolean).join(', ');
+
+          await tx.tripStop.create({
+            data: {
+              tripId: id,
+              stopOrder: sequence,
+              locationName: recipient,
+              address: fullAddress || address || 'Endereço não informado',
+              status: 'PENDING',
+            },
+          });
+
+          const delivery = await tx.delivery.create({
+            data: {
+              tripId: id,
+              recipient,
+              recipientDocument: stop.recipientDocument?.trim() || null,
+              address: address || 'Endereço não informado',
+              numberAddress,
+              complement,
+              neighborhood,
+              city,
+              state,
+              postalCode,
+              sequence,
+              status: DeliveryStatus.PENDING,
+              volumeCount: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+              weight: Number(stop.weight) >= 0 ? Number(stop.weight) : 0,
+              value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
+              quantityExpected: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+              notes: stop.notes?.trim() || null,
+              observations: stop.phone ? `Contato: ${stop.phone}` : null,
+            },
+          });
+
+          if (stop.invoiceNumber?.trim()) {
+            const invoiceNum = stop.invoiceNumber.trim();
+            const accessKey = stop.invoiceAccessKey?.trim() || 
+              `352608${Math.floor(10000000000000 + Math.random() * 90000000000000)}55001${invoiceNum.padStart(9, '0')}`;
+
+            await tx.invoice.create({
+              data: {
+                number: invoiceNum,
+                accessKey,
+                tripId: id,
+                deliveryId: delivery.id,
+                recipient,
+                recipientDocument: stop.recipientDocument?.trim() || null,
+                address: address || 'Endereço não informado',
+                numberAddress,
+                complement,
+                neighborhood,
+                city,
+                state,
+                postalCode,
+                volumeCount: Number(stop.volumeCount) > 0 ? Number(stop.volumeCount) : 1,
+                weight: Number(stop.weight) >= 0 ? Number(stop.weight) : 0,
+                value: Number(stop.invoiceValue) >= 0 ? Number(stop.invoiceValue) : 0,
+                status: InvoiceStatus.PENDING,
+              },
+            });
+          }
+        }
+      }
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: 'TRIP_UPDATED',
+        metadata: { tripId: id, tripCode: trip.tripCode },
+        prismaClient: tx,
+      });
+    });
+
+    return this.getAdminTripById(id);
+  }
+
+  async assignAdminTrip(
+    id: string,
+    dto: { driverId: string; vehicleId?: string; notes?: string },
+    actor?: { id: string },
+  ) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { deliveries: true },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status === TripStatus.IN_PROGRESS || trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Viagem já iniciada ou concluída não pode ser reatribuída por este fluxo.');
+    }
+    if (trip.status === TripStatus.CANCELLED) {
+      throw new BadRequestException('Viagem cancelada não pode ser atribuída.');
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: dto.driverId },
+      include: {
+        user: true,
+        assignments: { where: { isCurrent: true }, include: { vehicle: true }, take: 1 },
+      },
+    });
+    if (!driver) throw new NotFoundException('Motorista selecionado não encontrado');
+    if (driver.status === 'BLOQUEADO' || driver.user?.status === 'BLOCKED' || driver.user?.status === 'INACTIVE') {
+      throw new BadRequestException('Motorista selecionado está inativo ou bloqueado.');
+    }
+
+    let vehicleId = dto.vehicleId;
+    if (!vehicleId && driver.assignments && driver.assignments.length > 0) {
+      vehicleId = driver.assignments[0].vehicleId;
+    }
+    if (!vehicleId) {
+      throw new BadRequestException('Nenhum veículo vinculado ao motorista. Selecione um veículo para a viagem.');
+    }
+
+    if (trip.deliveries.length === 0) {
+      throw new BadRequestException('A rota precisa ter pelo menos 1 parada / entrega cadastrada antes de ser despachada.');
+    }
+
+    const updated = await this.prisma.trip.update({
+      where: { id },
+      data: {
+        driverId: dto.driverId,
+        vehicleId,
+        status: TripStatus.ASSIGNED,
+        notes: dto.notes ? (trip.notes ? `${trip.notes}\n[ATRIBUIÇÃO]: ${dto.notes}` : `[ATRIBUIÇÃO]: ${dto.notes}`) : trip.notes,
+      },
+      include: {
+        driver: { include: { user: true } },
+        vehicle: true,
+      },
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'TRIP_ASSIGNED',
+      metadata: { tripId: id, tripCode: trip.tripCode, driverId: dto.driverId, vehicleId },
+    });
+
+    return updated;
+  }
+
+  async unassignAdminTrip(id: string, dto: { reason: string }, actor?: { id: string }) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { driver: { include: { user: true } } },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status === TripStatus.IN_PROGRESS || trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Não é possível retirar a atribuição de uma rota já iniciada ou concluída.');
+    }
+    if (trip.status === TripStatus.CANCELLED) {
+      throw new BadRequestException('Viagem cancelada.');
+    }
+
+    const reason = dto.reason?.trim() || 'Desatribuição operacional solicitada pelo operador';
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const noteEntry = `\n[DESATRIBUIÇÃO em ${timestamp}]: Motorista ${trip.driver?.user?.name || 'Anterior'} removido. Motivo: ${reason}`;
+
+    const updated = await this.prisma.trip.update({
+      where: { id },
+      data: {
+        driverId: null,
+        vehicleId: null,
+        status: TripStatus.PENDING,
+        notes: trip.notes ? `${trip.notes}${noteEntry}` : noteEntry,
+      },
+      include: { vehicle: true },
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'TRIP_UNASSIGNED',
+      metadata: { tripId: id, tripCode: trip.tripCode, previousDriverId: trip.driverId, reason },
+    });
+
+    return updated;
+  }
+
+  async reassignAdminTrip(
+    id: string,
+    dto: { newDriverId: string; newVehicleId?: string; reason?: string },
+    actor?: { id: string },
+  ) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { driver: { include: { user: true } } },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status === TripStatus.IN_PROGRESS || trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Não é possível trocar o motorista de uma rota em andamento ou concluída.');
+    }
+
+    const newDriver = await this.prisma.driver.findUnique({
+      where: { id: dto.newDriverId },
+      include: {
+        user: true,
+        assignments: { where: { isCurrent: true }, include: { vehicle: true }, take: 1 },
+      },
+    });
+    if (!newDriver) throw new NotFoundException('Novo motorista não encontrado');
+    if (newDriver.status === 'BLOQUEADO' || newDriver.user?.status === 'BLOCKED' || newDriver.user?.status === 'INACTIVE') {
+      throw new BadRequestException('O novo motorista selecionado está bloqueado ou inativo.');
+    }
+
+    let vehicleId = dto.newVehicleId;
+    if (!vehicleId && newDriver.assignments && newDriver.assignments.length > 0) {
+      vehicleId = newDriver.assignments[0].vehicleId;
+    }
+    if (!vehicleId && trip.vehicleId) {
+      vehicleId = trip.vehicleId;
+    }
+    if (!vehicleId) {
+      throw new BadRequestException('Selecione um veículo para vincular à rota com o novo motorista.');
+    }
+
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const oldName = trip.driver?.user?.name || 'Anterior';
+    const newName = newDriver.user?.name || 'Novo Motorista';
+    const reason = dto.reason?.trim() || 'Reatribuição operacional';
+    const noteEntry = `\n[TROCA DE MOTORISTA em ${timestamp}]: De "${oldName}" para "${newName}". Motivo: ${reason}`;
+
+    const updated = await this.prisma.trip.update({
+      where: { id },
+      data: {
+        driverId: dto.newDriverId,
+        vehicleId,
+        status: TripStatus.ASSIGNED,
+        notes: trip.notes ? `${trip.notes}${noteEntry}` : noteEntry,
+      },
+      include: {
+        driver: { include: { user: true } },
+        vehicle: true,
+      },
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'TRIP_REASSIGNED',
+      metadata: {
+        tripId: id,
+        tripCode: trip.tripCode,
+        oldDriverId: trip.driverId,
+        newDriverId: dto.newDriverId,
+        vehicleId,
+        reason,
+      },
+    });
+
+    return updated;
+  }
+
+  async cancelAdminTrip(id: string, dto: { reason: string }, actor?: { id: string }) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: { driver: { include: { user: true } } },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Viagem já concluída não pode ser cancelada.');
+    }
+    if (trip.status === TripStatus.CANCELLED) {
+      return trip;
+    }
+
+    const reason = dto.reason?.trim();
+    if (!reason) {
+      throw new BadRequestException('O motivo do cancelamento é obrigatório.');
+    }
+
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const noteEntry = `\n[CANCELAMENTO em ${timestamp}]: Motivo: ${reason}`;
+
+    const updated = await this.prisma.trip.update({
+      where: { id },
+      data: {
+        status: TripStatus.CANCELLED,
+        notes: trip.notes ? `${trip.notes}${noteEntry}` : noteEntry,
+      },
+      include: {
+        driver: { include: { user: true } },
+        vehicle: true,
+      },
+    });
+
+    await this.auditService.log({
+      actorUserId: actor?.id || null,
+      action: 'TRIP_CANCELLED',
+      metadata: { tripId: id, tripCode: trip.tripCode, reason },
+    });
+
+    return updated;
+  }
+
+  async deleteAdminTrip(id: string, actor?: { id: string }) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { romaneios: true, tolls: true, occurrences: true },
+        },
+      },
+    });
+    if (!trip) throw new NotFoundException(`Viagem com ID ${id} não encontrada`);
+
+    if (trip.status !== TripStatus.PENDING && trip.status !== TripStatus.CANCELLED) {
+      throw new BadRequestException('Apenas viagens em rascunho (PENDING) ou canceladas sem execuções podem ser excluídas.');
+    }
+    if (trip._count.romaneios > 0 || trip._count.tolls > 0 || trip._count.occurrences > 0) {
+      throw new BadRequestException('Esta viagem possui registros operacionais vinculados e não pode ser excluída.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoice.deleteMany({ where: { tripId: id } });
+      await tx.delivery.deleteMany({ where: { tripId: id } });
+      await tx.tripStop.deleteMany({ where: { tripId: id } });
+      await tx.trip.delete({ where: { id } });
+
+      await this.auditService.log({
+        actorUserId: actor?.id || null,
+        action: 'TRIP_DELETED',
+        metadata: { tripId: id, tripCode: trip.tripCode },
+        prismaClient: tx,
+      });
+    });
+
+    return { success: true, message: 'Viagem em rascunho excluída com sucesso.' };
   }
 
   async updateAdminTripStatus(

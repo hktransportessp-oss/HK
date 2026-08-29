@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminUsersService } from './users/admin-users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -94,6 +94,74 @@ export class AdminDashboardController {
   @ApiOperation({ summary: 'Detalhes completos de uma viagem' })
   async getTripById(@Param('id') id: string) {
     return this.adminUsersService.getAdminTripById(id);
+  }
+
+  @Post('trips')
+  @ApiOperation({ summary: 'Criar nova viagem/rota operacional com paradas' })
+  async createTrip(
+    @Body() dto: any,
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.createAdminTrip(dto, actor);
+  }
+
+  @Patch('trips/:id')
+  @ApiOperation({ summary: 'Editar rota operacional e suas paradas' })
+  async updateTrip(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.updateAdminTrip(id, dto, actor);
+  }
+
+  @Post('trips/:id/assign')
+  @ApiOperation({ summary: 'Atribuir/despachar rota para motorista e veículo' })
+  async assignTrip(
+    @Param('id') id: string,
+    @Body() dto: { driverId: string; vehicleId?: string; notes?: string },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.assignAdminTrip(id, dto, actor);
+  }
+
+  @Post('trips/:id/unassign')
+  @ApiOperation({ summary: 'Retirar atribuição da rota antes do início' })
+  async unassignTrip(
+    @Param('id') id: string,
+    @Body() dto: { reason: string },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.unassignAdminTrip(id, dto, actor);
+  }
+
+  @Post('trips/:id/reassign')
+  @ApiOperation({ summary: 'Trocar motorista da rota antes do início' })
+  async reassignTrip(
+    @Param('id') id: string,
+    @Body() dto: { newDriverId: string; newVehicleId?: string; reason?: string },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.reassignAdminTrip(id, dto, actor);
+  }
+
+  @Post('trips/:id/cancel')
+  @ApiOperation({ summary: 'Cancelar rota com registro de motivo' })
+  async cancelTrip(
+    @Param('id') id: string,
+    @Body() dto: { reason: string },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.cancelAdminTrip(id, dto, actor);
+  }
+
+  @Delete('trips/:id')
+  @ApiOperation({ summary: 'Excluir rascunho de rota' })
+  async deleteTrip(
+    @Param('id') id: string,
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.deleteAdminTrip(id, actor);
   }
 
   @Patch('trips/:id/status')
