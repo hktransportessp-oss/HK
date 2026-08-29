@@ -839,68 +839,29 @@ export class AdminUsersService {
     return updated;
   }
 
-  async listTrackingLocations() {
-    return this.prisma.driverLastLocation.findMany({
-      orderBy: { updatedAt: 'desc' },
+  async getOccurrenceById(id: string) {
+    const occurrence = await this.prisma.occurrence.findUnique({
+      where: { id },
       include: {
         driver: {
           include: {
-            user: { select: { name: true, phone: true } },
-            assignments: {
-              where: { isCurrent: true },
-              include: { vehicle: true },
-              take: 1,
-            },
+            user: { select: { id: true, name: true, phone: true, cpf: true } },
           },
         },
         trip: {
-          select: {
-            id: true,
-            tripCode: true,
-            origin: true,
-            destination: true,
-            status: true,
+          include: {
+            vehicle: true,
           },
         },
+        delivery: true,
       },
     });
-  }
 
-  async listErpLogs(limit = 50) {
-    const records = await this.prisma.idempotencyRecord.findMany({
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-    });
+    if (!occurrence) {
+      throw new NotFoundException(`Ocorrência com ID ${id} não encontrada`);
+    }
 
-    return records.map((rec) => {
-      let preview = '';
-      try {
-        const parsed = JSON.parse(rec.response);
-        preview = parsed.message || parsed.status || 'OK';
-      } catch {
-        preview = rec.response.slice(0, 100);
-      }
-      return {
-        id: rec.id,
-        key: rec.key,
-        endpoint: rec.endpoint || 'ERP_WEBHOOK',
-        statusCode: rec.statusCode,
-        preview,
-        createdAt: rec.createdAt,
-      };
-    });
-  }
-
-  async listAuditLogs(limit = 100, query?: { userId?: string; action?: string }) {
-    const where: any = {};
-    if (query?.userId) where.actorUserId = query.userId;
-    if (query?.action) where.action = query.action;
-
-    return this.prisma.auditLog.findMany({
-      where,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-    });
+    return occurrence;
   }
 
   async getDriverDetails(driverId: string) {
@@ -1204,7 +1165,7 @@ export class AdminUsersService {
     }
 
     if (status === TripStatus.IN_PROGRESS) {
-      const allowedPrevious = [TripStatus.ASSIGNED, TripStatus.PENDING, TripStatus.ACCEPTED];
+      const allowedPrevious: TripStatus[] = [TripStatus.ASSIGNED, TripStatus.PENDING, TripStatus.ACCEPTED];
       if (!allowedPrevious.includes(trip.status)) {
         throw new BadRequestException(`Não é possível iniciar viagem que está no status ${trip.status}.`);
       }

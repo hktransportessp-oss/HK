@@ -31,8 +31,9 @@ export class RomaneiosService {
   }
 
   async findAllForDriver(driverId: string) {
+    if (!driverId) return [];
     return this.prisma.romaneio.findMany({
-      where: driverId ? { driverId } : {},
+      where: { driverId },
       include: {
         trip: true,
         documents: true,

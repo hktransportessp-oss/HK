@@ -73,6 +73,7 @@ class FakeLogisticsDao : LogisticsDao {
     override suspend fun clearTolls() {}
     override suspend fun clearFechamentos() {}
     override suspend fun clearNotifications() {}
+    override suspend fun clearSyncQueue() {}
     override suspend fun clearUserProfile() {}
     override suspend fun purgeDemoProfiles() {}
 }

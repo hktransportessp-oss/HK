@@ -74,6 +74,7 @@ class AuthRepository(
                 logisticsDao.clearTolls()
                 logisticsDao.clearFechamentos()
                 logisticsDao.clearNotifications()
+                logisticsDao.clearSyncQueue()
                 logisticsDao.clearUserProfile()
 
                 tokenManager.saveUserProfile(
@@ -150,6 +151,8 @@ class AuthRepository(
             logisticsDao.clearRomaneios()
             logisticsDao.clearTolls()
             logisticsDao.clearFechamentos()
+            logisticsDao.clearNotifications()
+            logisticsDao.clearSyncQueue()
             tokenManager.clearTokensAndSession()
         }
     }
@@ -166,6 +169,8 @@ class AuthRepository(
             logisticsDao.clearRomaneios()
             logisticsDao.clearTolls()
             logisticsDao.clearFechamentos()
+            logisticsDao.clearNotifications()
+            logisticsDao.clearSyncQueue()
         }
     }
 

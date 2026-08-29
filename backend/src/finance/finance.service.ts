@@ -6,8 +6,9 @@ export class FinanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findSettlementsForDriver(driverId: string) {
+    if (!driverId) return [];
     return this.prisma.financialSettlement.findMany({
-      where: driverId ? { driverId } : {},
+      where: { driverId },
       include: {
         trip: true,
         items: true,
@@ -40,10 +41,9 @@ export class FinanceService {
   }
 
   async findPaymentsForDriver(driverId: string) {
+    if (!driverId) return [];
     return this.prisma.payment.findMany({
-      where: driverId
-        ? { settlement: { driverId } }
-        : {},
+      where: { settlement: { driverId } },
       include: {
         settlement: true,
       },

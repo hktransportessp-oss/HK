@@ -13,8 +13,9 @@ export class TripsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAllForDriver(driverId: string) {
+    if (!driverId) return [];
     return this.prisma.trip.findMany({
-      where: driverId ? { driverId } : {},
+      where: { driverId },
       include: {
         vehicle: true,
         stops: { orderBy: { stopOrder: 'asc' } },

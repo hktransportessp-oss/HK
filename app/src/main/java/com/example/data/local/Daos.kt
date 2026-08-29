@@ -158,6 +158,9 @@ interface LogisticsDao {
     @Query("DELETE FROM notifications")
     suspend fun clearNotifications()
 
+    @Query("DELETE FROM sync_queue")
+    suspend fun clearSyncQueue()
+
     @Query("DELETE FROM user_profile")
     suspend fun clearUserProfile()
 

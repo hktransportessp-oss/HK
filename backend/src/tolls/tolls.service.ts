@@ -27,8 +27,9 @@ export class TollsService {
   }
 
   async findAllForDriver(driverId: string) {
+    if (!driverId) return [];
     return this.prisma.toll.findMany({
-      where: driverId ? { driverId } : {},
+      where: { driverId },
       include: {
         trip: true,
         receipts: true,

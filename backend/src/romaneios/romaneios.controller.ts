@@ -11,8 +11,10 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RomaneiosService } from './romaneios.service';
 import { CreateRomaneioDto } from './dto/create-romaneio.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { GetUser } from '../common/decorators/get-user.decorator';
-import { RomaneioStatus } from '@prisma/client';
+import { RomaneioStatus, Role } from '@prisma/client';
 
 @ApiTags('Romaneios')
 @ApiBearerAuth()
@@ -46,7 +48,9 @@ export class RomaneiosController {
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Atualiza o status de conferência do romaneio' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiOperation({ summary: 'Atualiza o status de conferência do romaneio (Restrito Admin/Manager)' })
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: RomaneioStatus,

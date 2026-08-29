@@ -91,7 +91,18 @@ class TokenManager(context: Context) {
     }
 
     fun clearTokensAndSession() {
-        prefs.edit().clear().apply()
+        val currentServerUrl = getServerUrl()
+        prefs.edit()
+            .remove(KEY_ACCESS_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_USER_NAME)
+            .remove(KEY_USER_CPF)
+            .remove(KEY_USER_PHONE)
+            .remove(KEY_TRUCK_MODEL)
+            .remove(KEY_TRUCK_PLATE)
+            .apply()
+        setServerUrl(currentServerUrl)
     }
 
     private fun String?.isNull_or_empty_custom(): Boolean {

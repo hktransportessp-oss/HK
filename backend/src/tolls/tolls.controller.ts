@@ -11,8 +11,10 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TollsService } from './tolls.service';
 import { CreateTollDto } from './dto/create-toll.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { GetUser } from '../common/decorators/get-user.decorator';
-import { TollStatus } from '@prisma/client';
+import { TollStatus, Role } from '@prisma/client';
 
 @ApiTags('Tolls')
 @ApiBearerAuth()
@@ -46,7 +48,9 @@ export class TollsController {
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Atualiza o status de aprovação/reembolso do pedágio' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiOperation({ summary: 'Atualiza o status de aprovação/reembolso do pedágio (Restrito Admin/Manager)' })
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: TollStatus,
