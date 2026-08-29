@@ -544,6 +544,7 @@ export class AdminUsersService {
       driversWithoutVehicle,
       totalVehicles,
       activeVehicles,
+      availableVehicles,
       pendingTrips,
       inProgressTrips,
       completedTrips,
@@ -560,6 +561,7 @@ export class AdminUsersService {
       inProgressTripsList,
       recentOccurrences,
       recentTolls,
+      recentRomaneios,
       unassignedDrivers,
       unlinkedDriversList,
     ] = await Promise.all([
@@ -578,6 +580,7 @@ export class AdminUsersService {
       }),
       this.prisma.vehicle.count(),
       this.prisma.vehicle.count({ where: { status: { not: 'INATIVO' } } }),
+      this.prisma.vehicle.count({ where: { status: 'DISPONIVEL' } }),
       this.prisma.trip.count({ where: { status: { in: ['ASSIGNED', 'PENDING', 'ACCEPTED'] } } }),
       this.prisma.trip.count({ where: { status: 'IN_PROGRESS' } }),
       this.prisma.trip.count({ where: { status: 'COMPLETED' } }),
@@ -638,6 +641,14 @@ export class AdminUsersService {
           trip: { select: { tripCode: true } },
         },
       }),
+      this.prisma.romaneio.findMany({
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { include: { user: { select: { name: true } } } },
+          trip: { select: { tripCode: true } },
+        },
+      }),
       this.prisma.driver.findMany({
         where: {
           assignments: {
@@ -673,6 +684,7 @@ export class AdminUsersService {
       erpOnlyDrivers,
       totalVehicles,
       activeVehicles,
+      availableVehicles,
       pendingTrips,
       inProgressTrips,
       completedTrips,
@@ -691,6 +703,7 @@ export class AdminUsersService {
       inProgressTripsList,
       recentOccurrences,
       recentTolls,
+      recentRomaneios,
       unassignedDrivers,
       unlinkedDriversList,
     };

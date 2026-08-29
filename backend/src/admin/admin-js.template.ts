@@ -289,7 +289,7 @@ export const ADMIN_JS_TEMPLATE = `
   function navigate(view) {
     STATE.currentView = view;
 
-    ['dashboard', 'drivers', 'vehicles', 'trips', 'romaneios', 'invoices', 'tolls', 'occurrences', 'finance', 'tracking', 'erp', 'audit', 'config'].forEach(v => {
+    ['dashboard', 'trips', 'romaneios', 'tolls', 'occurrences', 'tracking', 'drivers', 'vehicles', 'config'].forEach(v => {
       const navBtn = document.getElementById('nav-' + v);
       const viewSec = document.getElementById('view-' + v);
       if (navBtn) {
@@ -305,37 +305,29 @@ export const ADMIN_JS_TEMPLATE = `
     const pageTitle = document.getElementById('page-title');
     if (pageTitle) {
       const titles = {
-        dashboard: 'Dashboard Geral',
-        drivers: 'Gestão de Motoristas e Usuários',
-        vehicles: 'Frota de Veículos',
-        trips: 'Operação de Viagens',
-        romaneios: 'Gestão de Romaneios',
-        invoices: 'Notas Fiscais de Transporte',
-        tolls: 'Controle de Pedágios & Reembolsos',
-        occurrences: 'Tratamento de Ocorrências',
-        finance: 'Gestão Financeira & Fechamentos',
-        tracking: 'Rastreamento & Telemetria em Tempo Real',
-        erp: 'Integração ERP (Inbound & Outbound)',
-        audit: 'Auditoria de Ações & Segurança',
-        config: 'Configurações & Status do Sistema'
+        dashboard: 'Dashboard Operacional',
+        trips: 'Viagens / Rotas',
+        romaneios: 'Romaneios',
+        tolls: 'Pedágios Operacionais',
+        occurrences: 'Ocorrências',
+        tracking: 'Rastreamento',
+        drivers: 'Motoristas / Usuários',
+        vehicles: 'Veículos',
+        config: 'Administração do App HK Connect'
       };
-      pageTitle.innerText = titles[view] || 'Dashboard';
+      pageTitle.innerText = titles[view] || 'Dashboard Operacional';
     }
 
     renderIcons();
 
     if (view === 'dashboard') loadDashboard();
-    else if (view === 'drivers') loadUsers();
-    else if (view === 'vehicles') loadVehicles();
     else if (view === 'trips') loadTrips();
     else if (view === 'romaneios') loadRomaneios();
-    else if (view === 'invoices') loadInvoices();
     else if (view === 'tolls') loadTolls();
     else if (view === 'occurrences') loadOccurrences();
-    else if (view === 'finance') loadSettlements();
     else if (view === 'tracking') loadTracking();
-    else if (view === 'erp') loadErpLogs();
-    else if (view === 'audit') loadAuditLogs();
+    else if (view === 'drivers') loadUsers();
+    else if (view === 'vehicles') loadVehicles();
     else if (view === 'config') loadSystemConfig();
   }
 
@@ -344,7 +336,7 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // 1. DASHBOARD CONTROLLER
+  // 1. DASHBOARD CONTROLLER (OPERACIONAL)
   // ==============================================
   async function loadDashboard() {
     try {
@@ -357,30 +349,19 @@ export const ADMIN_JS_TEMPLATE = `
         if (el) el.innerText = (val !== null && val !== undefined) ? val : '0';
       };
 
-      setVal('stat-total-users', stats.totalUsers);
-      setVal('stat-active-users', stats.activeUsers);
       setVal('stat-total-drivers', stats.totalDrivers);
       setVal('stat-active-drivers', stats.activeDrivers);
       setVal('stat-available-drivers', stats.availableDrivers);
       setVal('stat-in-trip-drivers', stats.inTripDrivers);
       setVal('stat-drivers-no-vehicle', stats.driversWithoutVehicle);
-      setVal('stat-erp-drivers', stats.erpOnlyDrivers);
-      setVal('stat-total-vehicles', stats.totalVehicles);
       setVal('stat-active-vehicles', stats.activeVehicles);
       setVal('stat-pending-trips', stats.pendingTrips);
       setVal('stat-in-progress-trips', stats.inProgressTrips);
       setVal('stat-completed-trips', stats.completedTrips);
-
-      // New FASE 3 Dashboard Stats
-      setVal('stat-pending-settlements-amount', formatCurrency(stats.pendingSettlementsAmount || 0));
-      const pendingSettlementsCountEl = document.getElementById('stat-pending-settlements-count');
-      if (pendingSettlementsCountEl) {
-        pendingSettlementsCountEl.innerText = (stats.pendingSettlementsCount || 0) + ' fechamentos a pagar';
-      }
+      setVal('stat-pending-romaneios', stats.pendingRomaneiosCount);
+      setVal('stat-pending-tolls-count', stats.pendingTollsCount);
+      setVal('stat-open-occurrences', stats.openOccurrences);
       setVal('stat-drivers-no-signal', stats.driversNoSignalCount || 0);
-      setVal('stat-erp-failures', stats.erpFailuresCount || 0);
-      setVal('stat-open-occurrences', stats.openOccurrences || 0);
-      setVal('stat-pending-tolls', formatCurrency(stats.pendingTollsAmount || 0));
 
       // Render recent trips table
       const tripsTbody = document.getElementById('dashboard-recent-trips');
@@ -410,7 +391,7 @@ export const ADMIN_JS_TEMPLATE = `
           unassignedTbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:1rem; color:var(--emerald-base);">Todos os motoristas possuem veículo vinculado!</td></tr>';
         } else {
           unassignedTbody.innerHTML = stats.unassignedDrivers.map(d => {
-            const name = d.user?.name || 'Motorista ERP (' + (d.cnh || d.id.slice(0,6)) + ')';
+            const name = d.user?.name || 'Motorista (' + (d.cnh || d.id.slice(0,6)) + ')';
             const phone = formatPhone(d.user?.phone);
             return '<tr>' +
               '<td><strong>' + name + '</strong></td>' +
@@ -420,6 +401,30 @@ export const ADMIN_JS_TEMPLATE = `
                 '<button onclick="openAssignVehicleModal(\\'' + d.id + '\\', \\'' + name.replace(/'/g, "\\\\'") + '\\')" class="btn btn-cyan btn-sm">Vincular</button>' +
               '</td>' +
             '</tr>';
+          }).join('');
+        }
+      }
+
+      // Render recent romaneios
+      const romaneiosDiv = document.getElementById('dashboard-recent-romaneios');
+      if (romaneiosDiv) {
+        if (!stats.recentRomaneios || stats.recentRomaneios.length === 0) {
+          romaneiosDiv.innerHTML = '<p class="text-xs" style="color: var(--text-muted); font-style: italic; padding: 1rem 0;">Nenhum romaneio recente pendente de conferência.</p>';
+        } else {
+          romaneiosDiv.innerHTML = stats.recentRomaneios.map(r => {
+            const driver = r.driver?.user?.name || 'Motorista';
+            const code = r.romaneioNumber || r.id.slice(0, 8);
+            const statusBadge = getRomaneioStatusBadge(r.status);
+            return '<div style="padding:0.6rem; border-radius:0.5rem; background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between;">' +
+              '<div>' +
+                '<strong class="text-xs font-mono" style="color:var(--purple-base);">#' + code + '</strong>' +
+                '<p class="text-xs text-muted">' + driver + ' &bull; ' + (r.deliveriesCount || 0) + ' entregas</p>' +
+              '</div>' +
+              '<div class="flex items-center gap-2">' +
+                statusBadge +
+                '<button onclick="openRomaneioDetails(\\'' + r.id + '\\')" class="btn btn-secondary btn-xs">Conferir</button>' +
+              '</div>' +
+            '</div>';
           }).join('');
         }
       }
@@ -438,34 +443,16 @@ export const ADMIN_JS_TEMPLATE = `
                 '<strong class="text-xs" style="color:var(--amber-base);">' + (occ.title || occ.type) + '</strong>' +
                 '<p class="text-xs text-muted">Viagem #' + code + ' &bull; ' + driver + '</p>' +
               '</div>' +
-              '<span class="badge badge-warning text-xs">' + occ.status + '</span>' +
-            '</div>';
-          }).join('');
-        }
-      }
-
-      // Render ERP unlinked drivers
-      const erpDiv = document.getElementById('unlinked-drivers-list');
-      const erpBadge = document.getElementById('erp-badge');
-      if (erpDiv) {
-        const unlinked = stats.unlinkedDriversList || [];
-        if (erpBadge) erpBadge.innerText = unlinked.length + ' pendentes';
-        if (unlinked.length === 0) {
-          erpDiv.innerHTML = '<p class="text-xs" style="color: var(--emerald-base); font-style: italic; padding: 1rem 0;">Nenhum motorista pendente de vínculo.</p>';
-        } else {
-          erpDiv.innerHTML = unlinked.map(d => {
-            const desc = d.cnh ? 'CNH: ' + d.cnh : 'ID: ' + d.id.slice(0, 8);
-            return '<div style="padding:0.6rem; border-radius:0.5rem; background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between;">' +
-              '<div>' +
-                '<strong class="text-xs" style="color:var(--purple-base);">' + desc + '</strong>' +
-                '<p class="text-xs text-muted">Importado via ERP &bull; ' + formatDate(d.createdAt) + '</p>' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="badge badge-warning text-xs">' + occ.status + '</span>' +
+                '<button onclick="openOccurrenceDetails(\\'' + occ.id + '\\')" class="btn btn-secondary btn-xs">Tratar</button>' +
               '</div>' +
-              '<button onclick="openCreateUserModal(\\'DRIVER\\')" class="btn btn-primary btn-sm">Criar Login</button>' +
             '</div>';
           }).join('');
         }
       }
 
+      renderIcons();
     } catch (err) {
       showToast('Erro ao carregar Dashboard: ' + err.message, 'error');
     }
@@ -1905,271 +1892,7 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // 9. FINANCEIRO (FECHAMENTOS & LIQUIDAÇÃO)
-  // ==============================================
-  async function loadSettlements() {
-    try {
-      const search = document.getElementById('finance-search-input')?.value || '';
-      const status = document.getElementById('finance-status-filter')?.value || '';
-      const driverId = document.getElementById('finance-driver-filter')?.value || '';
-      const startDate = document.getElementById('finance-start-date')?.value || '';
-      const endDate = document.getElementById('finance-end-date')?.value || '';
-
-      let queryUrl = '/api/v1/admin/settlements?';
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (status) params.append('status', status);
-      if (driverId) params.append('driverId', driverId);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-
-      const settlements = await apiFetch(queryUrl + params.toString());
-      STATE.settlements = settlements;
-
-      // Populate driver filter dropdown if not populated
-      const driverSelect = document.getElementById('finance-driver-filter');
-      if (driverSelect && driverSelect.options.length <= 1) {
-        try {
-          const drivers = await apiFetch('/api/v1/admin/drivers');
-          drivers.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.innerText = d.user?.name ? (d.user.name + ' (' + (d.user.cpf || d.cnh || d.id.slice(0,6)) + ')') : ('Motorista ERP (' + (d.cnh || d.id.slice(0,6)) + ')');
-            driverSelect.appendChild(opt);
-          });
-        } catch (e) {
-          console.error('Erro ao carregar lista de motoristas para filtro:', e);
-        }
-      }
-
-      // Calculate totals
-      let totalCount = settlements.length;
-      let pendingCount = 0;
-      let pendingAmount = 0;
-      let paidCount = 0;
-      let paidAmount = 0;
-
-      settlements.forEach(s => {
-        if (s.status === 'PAID') {
-          paidCount++;
-          paidAmount += s.netAmount || 0;
-        } else if (s.status === 'PENDING') {
-          pendingCount++;
-          pendingAmount += s.netAmount || 0;
-        }
-      });
-
-      const countEl = document.getElementById('finance-total-count');
-      if (countEl) countEl.innerText = totalCount;
-
-      const pendAmtEl = document.getElementById('finance-pending-amount');
-      if (pendAmtEl) pendAmtEl.innerText = formatCurrency(pendingAmount);
-      const pendSubEl = document.getElementById('finance-pending-sub');
-      if (pendSubEl) pendSubEl.innerText = pendingCount + ' a liquidar';
-
-      const paidAmtEl = document.getElementById('finance-paid-amount');
-      if (paidAmtEl) paidAmtEl.innerText = formatCurrency(paidAmount);
-      const paidSubEl = document.getElementById('finance-paid-sub');
-      if (paidSubEl) paidSubEl.innerText = paidCount + ' liquidados';
-
-      renderSettlementsTable();
-    } catch (err) {
-      showToast('Erro ao carregar fechamentos financeiros: ' + err.message, 'error');
-    }
-  }
-
-  function getSettlementStatusBadge(status) {
-    if (status === 'PAID') return '<span class="badge badge-emerald">PAGO (PAID)</span>';
-    if (status === 'PENDING') return '<span class="badge badge-amber">PENDENTE (PENDING)</span>';
-    if (status === 'CANCELLED') return '<span class="badge badge-rose">CANCELADO (CANCELLED)</span>';
-    return '<span class="badge badge-purple">' + (status || '-') + '</span>';
-  }
-
-  function renderSettlementsTable() {
-    const tbody = document.getElementById('settlements-table-body');
-    if (!tbody) return;
-
-    if (!STATE.settlements || STATE.settlements.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum fechamento financeiro encontrado.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = STATE.settlements.map(s => {
-      const driverName = s.driver?.user?.name || 'Motorista ERP (' + (s.driver?.cnh || s.driverId.slice(0,6)) + ')';
-      const period = (s.periodStart ? formatDate(s.periodStart) : '-') + ' &agrave; ' + (s.periodEnd ? formatDate(s.periodEnd) : '-');
-      const paidDate = s.paidAt ? formatDate(s.paidAt) : (s.payments && s.payments.length > 0 ? formatDate(s.payments[0].paymentDate) : '-');
-
-      return '<tr>' +
-        '<td><strong class="font-mono" style="color: var(--brand-light);">' + (s.settlementCode || s.id.slice(0,8)) + '</strong></td>' +
-        '<td><strong>' + driverName + '</strong></td>' +
-        '<td class="text-xs text-muted font-mono">' + period + '</td>' +
-        '<td class="font-mono text-xs text-right" style="color: var(--emerald-base);">' + formatCurrency(s.grossFreight || 0) + '</td>' +
-        '<td class="font-mono text-xs text-right" style="color: var(--cyan-base);">' + formatCurrency(s.tollsTotal || 0) + '</td>' +
-        '<td class="font-mono text-xs text-right" style="color: var(--rose-base);">' + formatCurrency(s.deductionsTotal || 0) + '</td>' +
-        '<td class="font-mono text-xs text-right" style="color: var(--brand-light);">' + formatCurrency(s.additionsTotal || 0) + '</td>' +
-        '<td class="font-mono text-xs font-bold text-right" style="color: var(--emerald-base);">' + formatCurrency(s.netAmount || 0) + '</td>' +
-        '<td>' + getSettlementStatusBadge(s.status) + '</td>' +
-        '<td class="text-xs text-muted">' + paidDate + '</td>' +
-        '<td class="text-right">' +
-          '<button onclick="openSettlementDetails(\\'' + s.id + '\\')" class="btn btn-secondary btn-sm"><span data-lucide="file-text" class="icon-xs"></span><span>Ver Detalhes</span></button>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
-
-    renderIcons();
-  }
-
-  async function openSettlementDetails(id) {
-    try {
-      const s = await apiFetch('/api/v1/admin/settlements/' + id);
-      if (!s) return;
-
-      document.getElementById('settlement-detail-code').innerText = 'Fechamento #' + (s.settlementCode || s.id.slice(0,8));
-      document.getElementById('settlement-detail-sub').innerText = 'ID: ' + s.id;
-      document.getElementById('settlement-detail-status-badge').innerHTML = getSettlementStatusBadge(s.status);
-
-      const driverName = s.driver?.user?.name || 'Motorista ERP (' + (s.driver?.cnh || s.driverId?.slice(0,6)) + ')';
-      document.getElementById('settlement-detail-driver').innerText = driverName;
-      document.getElementById('settlement-detail-period').innerText = (s.periodStart ? formatDate(s.periodStart) : '-') + ' até ' + (s.periodEnd ? formatDate(s.periodEnd) : '-');
-      document.getElementById('settlement-detail-created-at').innerText = formatDate(s.createdAt);
-      
-      const paidDate = s.paidAt ? formatDate(s.paidAt) : (s.payments && s.payments.length > 0 ? formatDate(s.payments[0].paymentDate) : '-');
-      document.getElementById('settlement-detail-paid-at').innerText = paidDate;
-
-      // Values breakdown
-      document.getElementById('settlement-detail-gross').innerText = formatCurrency(s.grossFreight || 0);
-      document.getElementById('settlement-detail-tolls').innerText = formatCurrency(s.tollsTotal || 0);
-      document.getElementById('settlement-detail-additions').innerText = formatCurrency(s.additionsTotal || 0);
-      document.getElementById('settlement-detail-advances').innerText = formatCurrency(s.advancesTotal || 0);
-      document.getElementById('settlement-detail-deductions').innerText = formatCurrency(s.deductionsTotal || 0);
-      document.getElementById('settlement-detail-net').innerText = formatCurrency(s.netAmount || 0);
-
-      // Items breakdown table
-      const itemsBody = document.getElementById('settlement-detail-items-body');
-      if (itemsBody) {
-        if (!s.items || s.items.length === 0) {
-          itemsBody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:1rem; color:var(--text-muted);">Nenhum item discriminado neste fechamento.</td></tr>';
-        } else {
-          itemsBody.innerHTML = s.items.map(item => {
-            const isCredit = item.type === 'FREIGHT' || item.type === 'TOLL_REIMBURSEMENT' || item.type === 'ADDITION';
-            const color = isCredit ? 'var(--emerald-base)' : 'var(--rose-base)';
-            const sign = isCredit ? '+' : '-';
-            return '<tr>' +
-              '<td><strong class="text-xs">' + (item.description || item.type) + '</strong> <span class="badge badge-purple text-xs" style="margin-left:0.4rem;">' + item.type + '</span></td>' +
-              '<td class="text-xs font-mono text-muted">' + (s.trip?.tripCode || item.tripId || '-') + '</td>' +
-              '<td class="text-xs text-muted">' + formatDate(item.createdAt) + '</td>' +
-              '<td class="text-right font-mono text-xs font-bold" style="color:' + color + ';">' + sign + ' ' + formatCurrency(item.amount || 0) + '</td>' +
-            '</tr>';
-          }).join('');
-        }
-      }
-
-      // Payments list
-      const paymentsDiv = document.getElementById('settlement-detail-payments-container');
-      if (paymentsDiv) {
-        if (!s.payments || s.payments.length === 0) {
-          paymentsDiv.innerHTML = '<p class="text-xs text-muted" style="font-style:italic;">Nenhum pagamento registrado.</p>';
-        } else {
-          paymentsDiv.innerHTML = s.payments.map(p => {
-            return '<div style="padding:0.6rem 0.8rem; background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:0.5rem; display:flex; align-items:center; justify-content:space-between;">' +
-              '<div>' +
-                '<strong class="text-xs" style="color:var(--emerald-base);">' + formatCurrency(p.amount) + '</strong> ' +
-                '<span class="badge badge-cyan text-xs" style="margin-left:0.4rem;">' + (p.paymentMethod || 'PIX') + '</span>' +
-                '<p class="text-xs text-muted">ID Transação: <span class="font-mono text-white">' + (p.transactionId || '-') + '</span> &bull; ' + formatDate(p.paymentDate) + '</p>' +
-              '</div>' +
-              (p.receiptUrl ? '<a href="' + p.receiptUrl + '" target="_blank" class="btn btn-secondary btn-xs"><span data-lucide="external-link" class="icon-xs"></span><span>Comprovante</span></a>' : '') +
-            '</div>';
-          }).join('');
-        }
-      }
-
-      document.getElementById('settlement-detail-notes').innerText = s.notes || 'Sem observações registradas.';
-
-      // Action buttons
-      const actionsDiv = document.getElementById('settlement-detail-action-buttons');
-      if (actionsDiv) {
-        if (s.status === 'PENDING') {
-          actionsDiv.innerHTML =
-            '<button onclick="openPaySettlementForm(\\'' + s.id + '\\', \\'PAID\\', ' + s.netAmount + ')" class="btn btn-primary btn-sm"><span data-lucide="dollar-sign" class="icon-xs"></span><span>Registrar Pagamento (PAID)</span></button>' +
-            '<button onclick="openPaySettlementForm(\\'' + s.id + '\\', \\'CANCELLED\\', ' + s.netAmount + ')" class="btn btn-danger btn-sm"><span data-lucide="x-circle" class="icon-xs"></span><span>Cancelar Fechamento</span></button>';
-        } else if (s.status === 'PAID') {
-          actionsDiv.innerHTML = '<span class="badge badge-emerald" style="padding:0.4rem 0.8rem; font-size:0.8rem;"><span data-lucide="check-circle" class="icon-xs" style="margin-right:0.3rem;"></span>Fechamento Liquidado e Pago</span>';
-        } else {
-          actionsDiv.innerHTML = '<button onclick="openPaySettlementForm(\\'' + s.id + '\\', \\'PENDING\\', ' + s.netAmount + ')" class="btn btn-secondary btn-sm"><span data-lucide="refresh-cw" class="icon-xs"></span><span>Reabrir Fechamento (PENDING)</span></button>';
-        }
-      }
-
-      cancelSettlementForm();
-      openModal('modal-settlement-details');
-      renderIcons();
-    } catch (err) {
-      showToast('Erro ao carregar detalhes do fechamento: ' + err.message, 'error');
-    }
-  }
-
-  function openPaySettlementForm(id, targetStatus, netAmount) {
-    const formCont = document.getElementById('settlement-pay-form-container');
-    const titleEl = document.getElementById('settlement-form-title');
-    const submitBtn = document.getElementById('settlement-form-submit-btn');
-    document.getElementById('settlement-form-id').value = id;
-    document.getElementById('settlement-form-target-status').value = targetStatus;
-    document.getElementById('settlement-form-receipt').value = '';
-    document.getElementById('settlement-form-notes').value = '';
-
-    if (targetStatus === 'PAID') {
-      titleEl.innerText = 'Registrar Liquidação / Pagamento no Valor de ' + formatCurrency(netAmount);
-      titleEl.style.color = 'var(--emerald-base)';
-      submitBtn.className = 'btn btn-primary btn-sm';
-      submitBtn.innerText = 'Confirmar Liquidação (PAID)';
-    } else if (targetStatus === 'CANCELLED') {
-      titleEl.innerText = 'Cancelar este Fechamento Financeiro';
-      titleEl.style.color = 'var(--rose-base)';
-      submitBtn.className = 'btn btn-danger btn-sm';
-      submitBtn.innerText = 'Confirmar Cancelamento (CANCELLED)';
-    } else {
-      titleEl.innerText = 'Reabrir Fechamento para PENDENTE';
-      titleEl.style.color = 'var(--amber-base)';
-      submitBtn.className = 'btn btn-warning btn-sm';
-      submitBtn.innerText = 'Reabrir Fechamento';
-    }
-
-    formCont.style.display = 'block';
-  }
-
-  function cancelSettlementForm() {
-    const formCont = document.getElementById('settlement-pay-form-container');
-    if (formCont) formCont.style.display = 'none';
-  }
-
-  async function submitSettlementStatusUpdate() {
-    const id = document.getElementById('settlement-form-id').value;
-    const status = document.getElementById('settlement-form-target-status').value;
-    const method = document.getElementById('settlement-form-method').value;
-    const receipt = document.getElementById('settlement-form-receipt').value.trim();
-    const notes = document.getElementById('settlement-form-notes').value.trim();
-
-    try {
-      await apiFetch('/api/v1/admin/settlements/' + id + '/status', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status,
-          paymentMethod: method || undefined,
-          receiptUrl: receipt || undefined,
-          transactionId: receipt || undefined,
-          notes: notes || undefined,
-        })
-      });
-
-      showToast('Fechamento financeiro atualizado com sucesso!', 'success');
-      closeModal('modal-settlement-details');
-      loadSettlements();
-    } catch (err) {
-      showToast('Erro ao atualizar fechamento: ' + err.message, 'error');
-    }
-  }
-
-  // ==============================================
-  // 10. RASTREAMENTO & TELEMETRIA
+  // 9. RASTREAMENTO & TELEMETRIA
   // ==============================================
   async function loadTracking() {
     try {
@@ -2254,180 +1977,7 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // 11. INTEGRAÇÃO ERP (INBOUND & OUTBOUND)
-  // ==============================================
-  async function loadErpLogs() {
-    try {
-      const search = document.getElementById('erp-search-input')?.value || '';
-      const direction = document.getElementById('erp-direction-filter')?.value || '';
-      const status = document.getElementById('erp-status-filter')?.value || '';
-      const startDate = document.getElementById('erp-start-date')?.value || '';
-      const endDate = document.getElementById('erp-end-date')?.value || '';
-
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (direction) params.append('direction', direction);
-      if (status) params.append('status', status);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-
-      const data = await apiFetch('/api/v1/admin/erp-logs?' + params.toString());
-      STATE.erpLogs = data.events || [];
-
-      // Update stat cards
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.innerText = (val !== null && val !== undefined) ? val : '0';
-      };
-
-      setVal('erp-stat-total', data.stats?.totalEvents || 0);
-      setVal('erp-stat-inbound', data.stats?.inboundCount || 0);
-      setVal('erp-stat-outbound', data.stats?.outboundCount || 0);
-      setVal('erp-stat-errors', data.stats?.errorCount || 0);
-
-      renderErpLogsTable();
-    } catch (err) {
-      showToast('Erro ao carregar logs de integração ERP: ' + err.message, 'error');
-    }
-  }
-
-  function getErpDirectionBadge(direction) {
-    if (direction === 'INBOUND') {
-      return '<span class="badge badge-purple"><span data-lucide="arrow-down-left" class="icon-xs"></span> ERP &rarr; HK</span>';
-    }
-    return '<span class="badge badge-cyan"><span data-lucide="arrow-up-right" class="icon-xs"></span> HK &rarr; ERP</span>';
-  }
-
-  function getErpStatusBadge(status, statusCode) {
-    if (status === 'ERROR' || statusCode >= 400) {
-      return '<span class="badge badge-rose">' + (statusCode || '500') + ' ERROR</span>';
-    }
-    return '<span class="badge badge-emerald">' + (statusCode || '200') + ' OK</span>';
-  }
-
-  function renderErpLogsTable() {
-    const tbody = document.getElementById('erp-table-body');
-    if (!tbody) return;
-
-    if (!STATE.erpLogs || STATE.erpLogs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum evento de integração ERP encontrado.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = STATE.erpLogs.map(e => {
-      return '<tr>' +
-        '<td>' + getErpDirectionBadge(e.direction) + '</td>' +
-        '<td><strong class="text-xs font-mono" style="color:var(--brand-light);">' + (e.event || e.endpoint) + '</strong><br><span class="text-xs text-muted truncate" style="max-width:180px; display:inline-block;">' + (e.summary || '-') + '</span></td>' +
-        '<td class="font-mono text-xs">' + (e.externalId || '-') + '</td>' +
-        '<td class="font-mono text-xs text-muted truncate" style="max-width:140px;">' + (e.idempotencyKey || '-') + '</td>' +
-        '<td>' + getErpStatusBadge(e.status, e.statusCode) + '</td>' +
-        '<td class="text-xs text-muted">' + formatDate(e.receivedAt) + '</td>' +
-        '<td class="text-right">' +
-          '<button onclick="openErpEventDetails(\\'' + e.id + '\\')" class="btn btn-secondary btn-sm"><span data-lucide="file-text" class="icon-xs"></span><span>Ver Payload</span></button>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
-
-    renderIcons();
-  }
-
-  function openErpEventDetails(id) {
-    const event = STATE.erpLogs.find(e => e.id === id);
-    if (!event) return;
-
-    document.getElementById('erp-detail-title').innerText = event.directionLabel + ' - ' + (event.event || 'Evento');
-    document.getElementById('erp-detail-sub').innerText = 'Endpoint: ' + (event.endpoint || '-') + ' | Ref: ' + (event.externalId || '-');
-    document.getElementById('erp-detail-direction').innerHTML = getErpDirectionBadge(event.direction);
-    document.getElementById('erp-detail-status').innerHTML = getErpStatusBadge(event.status, event.statusCode);
-    document.getElementById('erp-detail-date').innerText = formatDate(event.receivedAt);
-    document.getElementById('erp-detail-idemp').innerText = event.idempotencyKey || '-';
-    document.getElementById('erp-detail-json').innerText = JSON.stringify(event.payloadSummary || {}, null, 2);
-
-    openModal('modal-erp-event-details');
-    renderIcons();
-  }
-
-  // ==============================================
-  // 12. AUDITORIA & SEGURANÇA
-  // ==============================================
-  async function loadAuditLogs() {
-    try {
-      const search = document.getElementById('audit-search-input')?.value || '';
-      const action = document.getElementById('audit-action-filter')?.value || '';
-      const startDate = document.getElementById('audit-start-date')?.value || '';
-      const endDate = document.getElementById('audit-end-date')?.value || '';
-
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (action) params.append('action', action);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-
-      const logs = await apiFetch('/api/v1/admin/audit-logs?' + params.toString());
-      STATE.auditLogs = logs || [];
-
-      renderAuditLogsTable();
-    } catch (err) {
-      showToast('Erro ao carregar registros de auditoria: ' + err.message, 'error');
-    }
-  }
-
-  function getAuditActionBadge(action) {
-    if (action.startsWith('USER_')) return '<span class="badge badge-brand">' + action + '</span>';
-    if (action.startsWith('TRIP_')) return '<span class="badge badge-cyan">' + action + '</span>';
-    if (action.startsWith('ROMANEIO_')) return '<span class="badge badge-purple">' + action + '</span>';
-    if (action.startsWith('TOLL_')) return '<span class="badge badge-warning">' + action + '</span>';
-    if (action.startsWith('SETTLEMENT_')) return '<span class="badge badge-emerald">' + action + '</span>';
-    if (action.startsWith('OCCURRENCE_')) return '<span class="badge badge-rose">' + action + '</span>';
-    return '<span class="badge badge-purple">' + action + '</span>';
-  }
-
-  function renderAuditLogsTable() {
-    const tbody = document.getElementById('audit-table-body');
-    if (!tbody) return;
-
-    if (!STATE.auditLogs || STATE.auditLogs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum registro de auditoria encontrado.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = STATE.auditLogs.map(l => {
-      const actorName = l.actor?.name || 'SISTEMA AUTOMÁTICO';
-      const actorRole = l.actor?.role ? '<span class="badge badge-purple text-xs">' + l.actor.role + '</span>' : '';
-      const target = l.target?.name ? (l.target.name + ' (' + (l.target.role || '') + ')') : '-';
-
-      return '<tr>' +
-        '<td class="text-xs text-muted font-mono">' + formatDate(l.createdAt) + '</td>' +
-        '<td><strong>' + actorName + '</strong></td>' +
-        '<td>' + actorRole + '</td>' +
-        '<td>' + getAuditActionBadge(l.action) + '</td>' +
-        '<td class="text-xs font-mono">' + target + '</td>' +
-        '<td class="text-right">' +
-          '<button onclick="openAuditDetails(\\'' + l.id + '\\')" class="btn btn-secondary btn-sm"><span data-lucide="shield" class="icon-xs"></span><span>Ver Dados</span></button>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
-
-    renderIcons();
-  }
-
-  function openAuditDetails(id) {
-    const log = STATE.auditLogs.find(l => l.id === id);
-    if (!log) return;
-
-    document.getElementById('audit-detail-title').innerText = 'Auditoria: ' + log.action;
-    document.getElementById('audit-detail-sub').innerText = 'ID: ' + log.id;
-    document.getElementById('audit-detail-user').innerText = (log.actor?.name || 'SISTEMA') + ' [' + (log.actor?.role || 'SYSTEM') + ']';
-    document.getElementById('audit-detail-action').innerHTML = getAuditActionBadge(log.action);
-    document.getElementById('audit-detail-date').innerText = formatDate(log.createdAt);
-    document.getElementById('audit-detail-json').innerText = JSON.stringify(log.metadata || {}, null, 2);
-
-    openModal('modal-audit-details');
-    renderIcons();
-  }
-
-  // ==============================================
-  // 13. CONFIGURAÇÕES & STATUS DO SISTEMA
+  // 10. CONFIGURAÇÕES & STATUS DO SISTEMA
   // ==============================================
   async function loadSystemConfig() {
     try {
@@ -2465,7 +2015,7 @@ export const ADMIN_JS_TEMPLATE = `
       setVal('config-android-ver', cfg.androidVersion);
       setVal('config-telemetry-sla', cfg.integrations?.telemetryFrequency);
 
-      showToast('Configurações e conexões operacionais validadas com sucesso!', 'success');
+      showToast('Configurações operacionais validadas com sucesso!', 'success');
       renderIcons();
     } catch (err) {
       showToast('Erro ao carregar configurações do sistema: ' + err.message, 'error');
@@ -2520,12 +2070,6 @@ export const ADMIN_JS_TEMPLATE = `
     document.getElementById('romaneio-start-date')?.addEventListener('change', () => loadRomaneios());
     document.getElementById('romaneio-end-date')?.addEventListener('change', () => loadRomaneios());
 
-    // Invoice search and filter inputs
-    document.getElementById('invoice-search-input')?.addEventListener('input', () => loadInvoices());
-    document.getElementById('invoice-status-filter')?.addEventListener('change', () => loadInvoices());
-    document.getElementById('invoice-start-date')?.addEventListener('change', () => loadInvoices());
-    document.getElementById('invoice-end-date')?.addEventListener('change', () => loadInvoices());
-
     // Toll search and filter inputs
     document.getElementById('toll-search-input')?.addEventListener('input', () => loadTolls());
     document.getElementById('toll-status-filter')?.addEventListener('change', () => loadTolls());
@@ -2538,26 +2082,6 @@ export const ADMIN_JS_TEMPLATE = `
     document.getElementById('occurrence-status-filter')?.addEventListener('change', () => loadOccurrences());
     document.getElementById('occurrence-start-date')?.addEventListener('change', () => loadOccurrences());
     document.getElementById('occurrence-end-date')?.addEventListener('change', () => loadOccurrences());
-
-    // Finance search and filter inputs
-    document.getElementById('finance-search-input')?.addEventListener('input', () => loadSettlements());
-    document.getElementById('finance-status-filter')?.addEventListener('change', () => loadSettlements());
-    document.getElementById('finance-driver-filter')?.addEventListener('change', () => loadSettlements());
-    document.getElementById('finance-start-date')?.addEventListener('change', () => loadSettlements());
-    document.getElementById('finance-end-date')?.addEventListener('change', () => loadSettlements());
-
-    // ERP search and filter inputs
-    document.getElementById('erp-search-input')?.addEventListener('input', () => loadErpLogs());
-    document.getElementById('erp-direction-filter')?.addEventListener('change', () => loadErpLogs());
-    document.getElementById('erp-status-filter')?.addEventListener('change', () => loadErpLogs());
-    document.getElementById('erp-start-date')?.addEventListener('change', () => loadErpLogs());
-    document.getElementById('erp-end-date')?.addEventListener('change', () => loadErpLogs());
-
-    // Audit search and filter inputs
-    document.getElementById('audit-search-input')?.addEventListener('input', () => loadAuditLogs());
-    document.getElementById('audit-action-filter')?.addEventListener('change', () => loadAuditLogs());
-    document.getElementById('audit-start-date')?.addEventListener('change', () => loadAuditLogs());
-    document.getElementById('audit-end-date')?.addEventListener('change', () => loadAuditLogs());
 
     // Initial check for active session
     const savedToken = localStorage.getItem('hk_access_token');

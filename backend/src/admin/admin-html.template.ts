@@ -527,38 +527,23 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </div>
 
       <!-- Nav Links -->
-      <nav style="flex: 1; padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.35rem;">
+      <nav style="flex: 1; padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; overflow-y: auto;">
         <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active">
           <span data-lucide="layout-dashboard" class="icon-sm"></span>
           <span>Dashboard</span>
         </button>
 
-        <button onclick="navigate('drivers')" id="nav-drivers" class="nav-item">
-          <span data-lucide="users" class="icon-sm"></span>
-          <span>Motoristas</span>
-        </button>
-
-        <button onclick="navigate('vehicles')" id="nav-vehicles" class="nav-item">
-          <span data-lucide="truck" class="icon-sm"></span>
-          <span>Veículos</span>
-        </button>
+        <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
+        <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Operação</div>
 
         <button onclick="navigate('trips')" id="nav-trips" class="nav-item">
           <span data-lucide="navigation" class="icon-sm"></span>
-          <span>Viagens</span>
+          <span>Viagens / Rotas</span>
         </button>
-
-        <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
-        <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Operações</div>
 
         <button onclick="navigate('romaneios')" id="nav-romaneios" class="nav-item">
           <span data-lucide="file-text" class="icon-sm"></span>
           <span>Romaneios</span>
-        </button>
-
-        <button onclick="navigate('invoices')" id="nav-invoices" class="nav-item">
-          <span data-lucide="receipt" class="icon-sm"></span>
-          <span>Notas Fiscais</span>
         </button>
 
         <button onclick="navigate('tolls')" id="nav-tolls" class="nav-item">
@@ -571,32 +556,30 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
           <span>Ocorrências</span>
         </button>
 
-        <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
-        <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Gestão & Auditoria</div>
-
-        <button onclick="navigate('finance')" id="nav-finance" class="nav-item">
-          <span data-lucide="dollar-sign" class="icon-sm"></span>
-          <span>Financeiro</span>
-        </button>
-
         <button onclick="navigate('tracking')" id="nav-tracking" class="nav-item">
           <span data-lucide="map-pin" class="icon-sm"></span>
           <span>Rastreamento</span>
         </button>
 
-        <button onclick="navigate('erp')" id="nav-erp" class="nav-item">
-          <span data-lucide="server" class="icon-sm"></span>
-          <span>Integração ERP</span>
+        <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
+        <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Cadastros</div>
+
+        <button onclick="navigate('drivers')" id="nav-drivers" class="nav-item">
+          <span data-lucide="users" class="icon-sm"></span>
+          <span>Motoristas / Usuários</span>
         </button>
 
-        <button onclick="navigate('audit')" id="nav-audit" class="nav-item">
-          <span data-lucide="shield" class="icon-sm"></span>
-          <span>Auditoria</span>
+        <button onclick="navigate('vehicles')" id="nav-vehicles" class="nav-item">
+          <span data-lucide="truck" class="icon-sm"></span>
+          <span>Veículos</span>
         </button>
+
+        <div style="height: 1px; background: var(--border-color); margin: 0.25rem 0.5rem;"></div>
+        <div style="padding: 0.25rem 0.5rem; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">App HK Connect</div>
 
         <button onclick="navigate('config')" id="nav-config" class="nav-item">
           <span data-lucide="settings" class="icon-sm"></span>
-          <span>Configurações</span>
+          <span>Administração do App</span>
         </button>
       </nav>
 
@@ -628,7 +611,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </header>
 
       <!-- ============================================== -->
-      <!-- VIEW 1: DASHBOARD -->
+      <!-- VIEW 1: DASHBOARD OPERACIONAL -->
       <!-- ============================================== -->
       <section id="view-dashboard" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
         
@@ -636,38 +619,11 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
         <div class="grid-stats">
           <div class="card" style="padding: 1.1rem;">
             <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Total Usuários</span>
-              <span class="badge badge-brand"><span data-lucide="users" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-total-users" class="text-2xl font-bold">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Sistema Central</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Usuários Ativos</span>
-              <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-active-users" class="text-2xl font-bold" style="color: var(--emerald-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Acesso liberado</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Motoristas Cadastrados</span>
-              <span class="badge badge-warning"><span data-lucide="user-check" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-total-drivers" class="text-2xl font-bold" style="color: var(--amber-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Total na base</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
               <span class="text-xs font-semibold uppercase tracking-wider">Motoristas Ativos</span>
               <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
             </div>
             <p id="stat-active-drivers" class="text-2xl font-bold" style="color: var(--emerald-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Status ATIVO</span>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Status ATIVO na base</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
@@ -685,7 +641,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
               <span class="badge badge-brand"><span data-lucide="navigation" class="icon-xs"></span></span>
             </div>
             <p id="stat-in-trip-drivers" class="text-2xl font-bold" style="color: var(--brand-light);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Em trânsito</span>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Em rota operacional</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
@@ -694,34 +650,16 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
               <span class="badge badge-danger"><span data-lucide="alert-triangle" class="icon-xs"></span></span>
             </div>
             <p id="stat-drivers-no-vehicle" class="text-2xl font-bold" style="color: var(--rose-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Sem vínculo</span>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Pendente de vínculo</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
             <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">ERP_ONLY</span>
-              <span class="badge badge-purple"><span data-lucide="link-2-off" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-erp-drivers" class="text-2xl font-bold" style="color: var(--purple-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Aguardando login</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Veículos Cadastrados</span>
-              <span class="badge badge-cyan"><span data-lucide="truck" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-total-vehicles" class="text-2xl font-bold" style="color: var(--cyan-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Total frota</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Veículos Ativos</span>
-              <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
+              <span class="text-xs font-semibold uppercase tracking-wider">Veículos Operacionais</span>
+              <span class="badge badge-success"><span data-lucide="truck" class="icon-xs"></span></span>
             </div>
             <p id="stat-active-vehicles" class="text-2xl font-bold" style="color: var(--emerald-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Operacionais</span>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Frota disponível/em uso</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
@@ -739,7 +677,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
               <span class="badge badge-brand"><span data-lucide="navigation" class="icon-xs"></span></span>
             </div>
             <p id="stat-in-progress-trips" class="text-2xl font-bold" style="color: var(--brand-light);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Na estrada</span>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Em trânsito ativo</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
@@ -753,11 +691,29 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
 
           <div class="card" style="padding: 1.1rem;">
             <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Fechamentos Pendentes</span>
-              <span class="badge badge-warning"><span data-lucide="dollar-sign" class="icon-xs"></span></span>
+              <span class="text-xs font-semibold uppercase tracking-wider">Romaneios Pendentes</span>
+              <span class="badge badge-purple"><span data-lucide="file-text" class="icon-xs"></span></span>
             </div>
-            <p id="stat-pending-settlements-amount" class="text-xl font-bold font-mono" style="color: var(--amber-base);">-</p>
-            <span id="stat-pending-settlements-count" class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">0 fechamentos a pagar</span>
+            <p id="stat-pending-romaneios" class="text-2xl font-bold" style="color: var(--purple-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Aguardando conferência</span>
+          </div>
+
+          <div class="card" style="padding: 1.1rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider">Pedágios Pendentes</span>
+              <span class="badge badge-cyan"><span data-lucide="credit-card" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-pending-tolls-count" class="text-2xl font-bold" style="color: var(--cyan-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Comprovantes a analisar</span>
+          </div>
+
+          <div class="card" style="padding: 1.1rem;">
+            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
+              <span class="text-xs font-semibold uppercase tracking-wider">Ocorrências Abertas</span>
+              <span class="badge badge-warning"><span data-lucide="alert-octagon" class="icon-xs"></span></span>
+            </div>
+            <p id="stat-open-occurrences" class="text-2xl font-bold" style="color: var(--amber-base);">-</p>
+            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Incidentes em tratamento</span>
           </div>
 
           <div class="card" style="padding: 1.1rem;">
@@ -768,36 +724,9 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             <p id="stat-drivers-no-signal" class="text-2xl font-bold" style="color: var(--rose-base);">-</p>
             <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Sem GPS recente (&gt;15 min)</span>
           </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Falhas Integração ERP</span>
-              <span class="badge badge-danger"><span data-lucide="server" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-erp-failures" class="text-2xl font-bold" style="color: var(--rose-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Erros de comunicação</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Ocorrências Abertas</span>
-              <span class="badge badge-warning"><span data-lucide="alert-octagon" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-open-occurrences" class="text-2xl font-bold" style="color: var(--amber-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Pendentes de resolução</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Pedágios Pendentes</span>
-              <span class="badge badge-cyan"><span data-lucide="credit-card" class="icon-xs"></span></span>
-            </div>
-            <p id="stat-pending-tolls" class="text-xl font-bold font-mono" style="color: var(--cyan-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Aguardando aprovação</span>
-          </div>
         </div>
 
-        <!-- Quick Tables Grid -->
+        <!-- Quick Tables Grid 1: Últimas Viagens & Motoristas sem Veículo -->
         <div class="grid-2">
           <!-- 1. ÚLTIMAS VIAGENS -->
           <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
@@ -859,33 +788,71 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <!-- Second Row: Ocorrências Recentes & Sincronização ERP -->
+        <!-- Quick Tables Grid 2: Romaneios Recebidos & Ocorrências Recentes -->
         <div class="grid-2">
-          <!-- 3. OCORRÊNCIAS OPERACIONAIS -->
+          <!-- 3. ROMANEIOS RECEBIDOS DO APP -->
           <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-sm font-bold flex items-center gap-2">
-                  <span data-lucide="shield-alert" class="icon-sm" style="color: var(--amber-base);"></span>
+                  <span data-lucide="file-text" class="icon-sm" style="color: var(--purple-base);"></span>
+                  <span>Romaneios Recebidos do App</span>
+                </h3>
+                <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">Documentos enviados pelos motoristas aguardando conferência</p>
+              </div>
+              <button onclick="navigate('romaneios')" class="btn btn-secondary btn-sm">Ver Romaneios</button>
+            </div>
+            <div id="dashboard-recent-romaneios" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto;">
+              <p class="text-xs" style="color: var(--text-muted); font-style: italic; padding: 1rem 0;">Nenhum romaneio pendente.</p>
+            </div>
+          </div>
+
+          <!-- 4. OCORRÊNCIAS OPERACIONAIS -->
+          <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold flex items-center gap-2">
+                  <span data-lucide="alert-octagon" class="icon-sm" style="color: var(--amber-base);"></span>
                   <span>Alertas e Ocorrências Recentes</span>
                 </h3>
                 <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">Incidentes em trânsito reportados pelo motorista</p>
               </div>
+              <button onclick="navigate('occurrences')" class="btn btn-secondary btn-sm">Ver Ocorrências</button>
             </div>
             <div id="dashboard-recent-occurrences" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto;">
               <p class="text-xs" style="color: var(--text-muted); font-style: italic; padding: 1rem 0;">Nenhuma ocorrência pendente.</p>
             </div>
           </div>
+        </div>
 
-          <!-- 4. SINCRONIZAÇÃO ERP_ONLY -->
+        <!-- Quick Tables Grid 3: Pedágios Aguardando Análise & Motoristas ERP Pendentes de Login -->
+        <div class="grid-2">
+          <!-- 5. PEDÁGIOS OPERACIONAIS -->
           <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-sm font-bold flex items-center gap-2">
-                  <span data-lucide="link-2-off" class="icon-sm" style="color: var(--purple-base);"></span>
-                  <span>Sincronização ERP (Motoristas Pendentes)</span>
+                  <span data-lucide="credit-card" class="icon-sm" style="color: var(--cyan-base);"></span>
+                  <span>Pedágios Aguardando Análise</span>
                 </h3>
-                <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">Cadastros recebidos do ERP sem conta de login no aplicativo</p>
+                <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">Comprovantes de pedágio lançados pelo app</p>
+              </div>
+              <button onclick="navigate('tolls')" class="btn btn-secondary btn-sm">Ver Pedágios</button>
+            </div>
+            <div id="dashboard-recent-tolls" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto;">
+              <p class="text-xs" style="color: var(--text-muted); font-style: italic; padding: 1rem 0;">Nenhum pedágio pendente de análise.</p>
+            </div>
+          </div>
+
+          <!-- 6. SINCRONIZAÇÃO ERP_ONLY -->
+          <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold flex items-center gap-2">
+                  <span data-lucide="users" class="icon-sm" style="color: var(--purple-base);"></span>
+                  <span>Motoristas Pendentes de Login</span>
+                </h3>
+                <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.15rem;">Cadastros recebidos do ERP sem conta de login criada no app</p>
               </div>
               <span id="erp-badge" class="badge badge-purple">0 pendentes</span>
             </div>
@@ -1107,66 +1074,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </section>
 
       <!-- ============================================== -->
-      <!-- VIEW 6: NOTAS FISCAIS -->
-      <!-- ============================================== -->
-      <section id="view-invoices" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- Filters -->
-        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
-          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
-            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
-              <span class="input-icon" data-lucide="search"></span>
-              <input type="text" id="invoice-search-input" class="input-control" placeholder="Buscar por Chave de Acesso (44 dígitos), Número da NF, Destinatário ou Viagem...">
-            </div>
-
-            <select id="invoice-status-filter" class="input-control" style="width: auto; min-width: 170px;">
-              <option value="">Todos os Status</option>
-              <option value="PENDING">Pendente (PENDING)</option>
-              <option value="IN_TRANSIT">Em Trânsito (IN_TRANSIT)</option>
-              <option value="DELIVERED">Entregue (DELIVERED)</option>
-              <option value="RETURNED">Devolvida (RETURNED)</option>
-              <option value="CANCELLED">Cancelada (CANCELLED)</option>
-            </select>
-
-            <div class="flex items-center gap-2" style="font-size: 0.75rem; color: var(--text-muted);">
-              <span>De:</span>
-              <input type="date" id="invoice-start-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-              <span>Até:</span>
-              <input type="date" id="invoice-end-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-            </div>
-          </div>
-
-          <button onclick="loadInvoices()" class="btn btn-secondary btn-sm">
-            <span data-lucide="refresh-cw" class="icon-xs"></span>
-            <span>Filtrar</span>
-          </button>
-        </div>
-
-        <!-- Table -->
-        <div class="card table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Número / Série</th>
-                <th>Chave de Acesso NF-e</th>
-                <th>Destinatário & Cidade/UF</th>
-                <th>Viagem / Motorista</th>
-                <th>Volumes / Peso</th>
-                <th>Valor Carga (ERP)</th>
-                <th>Status</th>
-                <th class="text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="invoices-table-body">
-              <tr>
-                <td colspan="8" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando notas fiscais...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================================== -->
-      <!-- VIEW 7: PEDÁGIOS -->
+      <!-- VIEW 6: PEDÁGIOS OPERACIONAIS -->
       <!-- ============================================== -->
       <section id="view-tolls" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
         <!-- Filters -->
@@ -1223,7 +1131,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </section>
 
       <!-- ============================================== -->
-      <!-- VIEW 8: OCORRÊNCIAS -->
+      <!-- VIEW 7: OCORRÊNCIAS OPERACIONAIS -->
       <!-- ============================================== -->
       <section id="view-occurrences" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
         <!-- Filters -->
@@ -1288,101 +1196,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </section>
 
       <!-- ============================================== -->
-      <!-- VIEW 9: FINANCEIRO (FECHAMENTOS & LIQUIDAÇÃO) -->
-      <!-- ============================================== -->
-      <section id="view-finance" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- KPI Summary Cards -->
-        <div class="grid-stats">
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Total Fechamentos</span>
-              <span class="badge badge-brand"><span data-lucide="dollar-sign" class="icon-xs"></span></span>
-            </div>
-            <p id="finance-total-count" class="text-2xl font-bold">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Períodos apurados</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Pendente de Pagamento</span>
-              <span class="badge badge-warning"><span data-lucide="clock" class="icon-xs"></span></span>
-            </div>
-            <p id="finance-pending-amount" class="text-2xl font-bold font-mono" style="color: var(--amber-base);">-</p>
-            <span id="finance-pending-sub" class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">0 a liquidar</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Total Liquidado (Pago)</span>
-              <span class="badge badge-success"><span data-lucide="check-circle" class="icon-xs"></span></span>
-            </div>
-            <p id="finance-paid-amount" class="text-2xl font-bold font-mono" style="color: var(--emerald-base);">-</p>
-            <span id="finance-paid-sub" class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">0 liquidados</span>
-          </div>
-        </div>
-
-        <!-- Filters Bar -->
-        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
-          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
-            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
-              <span class="input-icon" data-lucide="search"></span>
-              <input type="text" id="finance-search-input" class="input-control" placeholder="Buscar por Código, Motorista, CPF ou Viagem...">
-            </div>
-
-            <select id="finance-status-filter" class="input-control" style="width: auto; min-width: 160px;">
-              <option value="">Todos os Status</option>
-              <option value="PENDING">Pendente (PENDING)</option>
-              <option value="PAID">Pago (PAID)</option>
-              <option value="CANCELLED">Cancelado (CANCELLED)</option>
-            </select>
-
-            <select id="finance-driver-filter" class="input-control" style="width: auto; min-width: 180px;">
-              <option value="">Todos os Motoristas</option>
-            </select>
-
-            <div class="flex items-center gap-2" style="font-size: 0.75rem; color: var(--text-muted);">
-              <span>De:</span>
-              <input type="date" id="finance-start-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-              <span>Até:</span>
-              <input type="date" id="finance-end-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-            </div>
-          </div>
-
-          <button onclick="loadSettlements()" class="btn btn-secondary btn-sm">
-            <span data-lucide="refresh-cw" class="icon-xs"></span>
-            <span>Filtrar</span>
-          </button>
-        </div>
-
-        <!-- Settlements Table -->
-        <div class="card table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Código Fechamento</th>
-                <th>Motorista</th>
-                <th>Período</th>
-                <th>Frete Bruto</th>
-                <th>Pedágios</th>
-                <th>Descontos</th>
-                <th>Acréscimos</th>
-                <th>Valor Líquido</th>
-                <th>Status</th>
-                <th>Data Pagamento</th>
-                <th class="text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="settlements-table-body">
-              <tr>
-                <td colspan="11" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando fechamentos financeiros...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================================== -->
-      <!-- VIEW 10: RASTREAMENTO & TELEMETRIA -->
+      <!-- VIEW 8: RASTREAMENTO & TELEMETRIA OPERACIONAL -->
       <!-- ============================================== -->
       <section id="view-tracking" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
         <!-- Telemetry Indicators -->
@@ -1478,166 +1292,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
       </section>
 
       <!-- ============================================== -->
-      <!-- VIEW 11: INTEGRAÇÃO ERP (INBOUND & OUTBOUND) -->
-      <!-- ============================================== -->
-      <section id="view-erp" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- KPI Summary Cards -->
-        <div class="grid-stats">
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Total de Eventos</span>
-              <span class="badge badge-brand"><span data-lucide="server" class="icon-xs"></span></span>
-            </div>
-            <p id="erp-stat-total" class="text-2xl font-bold">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Inbound & Outbound</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">ERP &rarr; HK (Entrada)</span>
-              <span class="badge badge-purple"><span data-lucide="arrow-down-left" class="icon-xs"></span></span>
-            </div>
-            <p id="erp-stat-inbound" class="text-2xl font-bold" style="color: var(--purple-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Webhooks e Cargas</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">HK &rarr; ERP (Saída)</span>
-              <span class="badge badge-cyan"><span data-lucide="arrow-up-right" class="icon-xs"></span></span>
-            </div>
-            <p id="erp-stat-outbound" class="text-2xl font-bold" style="color: var(--cyan-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Eventos POD & Ocorrências</span>
-          </div>
-
-          <div class="card" style="padding: 1.1rem;">
-            <div class="flex items-center justify-between" style="color: var(--text-muted); margin-bottom: 0.35rem;">
-              <span class="text-xs font-semibold uppercase tracking-wider">Falhas Registradas</span>
-              <span class="badge badge-danger"><span data-lucide="alert-triangle" class="icon-xs"></span></span>
-            </div>
-            <p id="erp-stat-errors" class="text-2xl font-bold" style="color: var(--rose-base);">-</p>
-            <span class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem; display: block;">Status HTTP &ge; 400</span>
-          </div>
-        </div>
-
-        <!-- Filters Bar -->
-        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
-          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
-            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
-              <span class="input-icon" data-lucide="search"></span>
-              <input type="text" id="erp-search-input" class="input-control" placeholder="Buscar por Endpoint, Evento ou Chave de Idempotência...">
-            </div>
-
-            <select id="erp-direction-filter" class="input-control" style="width: auto; min-width: 180px;">
-              <option value="">Todas as Direções</option>
-              <option value="INBOUND">ERP &rarr; HK CONNECT (Entrada)</option>
-              <option value="OUTBOUND">HK CONNECT &rarr; ERP (Saída)</option>
-            </select>
-
-            <select id="erp-status-filter" class="input-control" style="width: auto; min-width: 150px;">
-              <option value="">Todos os Status</option>
-              <option value="SUCCESS">Sucesso (2xx / PROCESSED)</option>
-              <option value="ERROR">Erro / Falha (&ge; 400)</option>
-            </select>
-
-            <div class="flex items-center gap-2" style="font-size: 0.75rem; color: var(--text-muted);">
-              <span>De:</span>
-              <input type="date" id="erp-start-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-              <span>Até:</span>
-              <input type="date" id="erp-end-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-            </div>
-          </div>
-
-          <button onclick="loadErpLogs()" class="btn btn-secondary btn-sm">
-            <span data-lucide="refresh-cw" class="icon-xs"></span>
-            <span>Filtrar</span>
-          </button>
-        </div>
-
-        <!-- ERP Events Table -->
-        <div class="card table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Direção</th>
-                <th>Evento / Endpoint</th>
-                <th>ID Externo / Referência</th>
-                <th>Idempotency Key</th>
-                <th>Status / HTTP</th>
-                <th>Data / Hora</th>
-                <th class="text-right">Payload Sanitizado</th>
-              </tr>
-            </thead>
-            <tbody id="erp-table-body">
-              <tr>
-                <td colspan="7" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando logs de integração ERP...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================================== -->
-      <!-- VIEW 12: AUDITORIA & SEGURANÇA -->
-      <!-- ============================================== -->
-      <section id="view-audit" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- Filters Bar -->
-        <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
-          <div class="flex items-center gap-3" style="flex: 1; flex-wrap: wrap; min-width: 280px;">
-            <div class="input-with-icon" style="flex: 1; min-width: 220px;">
-              <span class="input-icon" data-lucide="search"></span>
-              <input type="text" id="audit-search-input" class="input-control" placeholder="Buscar por Ação, ID de Usuário ou Detalhe...">
-            </div>
-
-            <select id="audit-action-filter" class="input-control" style="width: auto; min-width: 180px;">
-              <option value="">Todas as Ações</option>
-              <option value="USER_">Usuários (USER_*)</option>
-              <option value="TRIP_">Viagens (TRIP_*)</option>
-              <option value="ROMANEIO_">Romaneios (ROMANEIO_*)</option>
-              <option value="TOLL_">Pedágios (TOLL_*)</option>
-              <option value="OCCURRENCE_">Ocorrências (OCCURRENCE_*)</option>
-              <option value="SETTLEMENT_">Financeiro (SETTLEMENT_*)</option>
-              <option value="ERP_">Integrações (ERP_*)</option>
-            </select>
-
-            <div class="flex items-center gap-2" style="font-size: 0.75rem; color: var(--text-muted);">
-              <span>De:</span>
-              <input type="date" id="audit-start-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-              <span>Até:</span>
-              <input type="date" id="audit-end-date" class="input-control" style="width: auto; padding: 0.4rem 0.6rem;">
-            </div>
-          </div>
-
-          <button onclick="loadAuditLogs()" class="btn btn-secondary btn-sm">
-            <span data-lucide="refresh-cw" class="icon-xs"></span>
-            <span>Filtrar</span>
-          </button>
-        </div>
-
-        <!-- Audit Table -->
-        <div class="card table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Data / Hora</th>
-                <th>Usuário Responsável</th>
-                <th>Perfil (Role)</th>
-                <th>Ação Executada</th>
-                <th>Usuário Alvo</th>
-                <th class="text-right">Metadata Sanitizada</th>
-              </tr>
-            </thead>
-            <tbody id="audit-table-body">
-              <tr>
-                <td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Carregando trilha de auditoria...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================================== -->
-      <!-- VIEW 13: CONFIGURAÇÕES & STATUS DO SISTEMA -->
+      <!-- VIEW 9: ADMINISTRAÇÃO & STATUS DO APP -->
       <!-- ============================================== -->
       <section id="view-config" class="hidden" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
         <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color);">
@@ -2616,275 +2271,6 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
 
       <div class="modal-footer">
         <button type="button" onclick="closeModal('modal-occurrence-details')" class="btn btn-secondary">Fechar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: DETALHES DO FECHAMENTO FINANCEIRO -->
-  <div id="modal-settlement-details" class="modal-overlay hidden">
-    <div class="card modal-content" style="max-width: 860px;">
-      <div class="modal-header">
-        <div class="flex items-center gap-3">
-          <div style="width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--emerald-base); display: flex; align-items: center; justify-content: center; color: #fff;">
-            <span data-lucide="dollar-sign" class="icon-md"></span>
-          </div>
-          <div>
-            <h3 id="settlement-detail-code" class="text-base font-bold">Fechamento Financeiro</h3>
-            <p id="settlement-detail-sub" class="text-xs" style="color: var(--text-secondary);"></p>
-          </div>
-        </div>
-        <button type="button" onclick="closeModal('modal-settlement-details')" class="btn btn-secondary btn-icon" title="Fechar">
-          <span data-lucide="x" class="icon-sm"></span>
-        </button>
-      </div>
-
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-        <!-- Status and Actions Bar -->
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
-          <div>
-            <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-muted); display: block;">Status do Fechamento</span>
-            <div id="settlement-detail-status-badge" style="margin-top: 0.25rem;"></div>
-          </div>
-          <div id="settlement-detail-action-buttons" class="flex items-center gap-2">
-            <!-- Dynamic Actions (Pagar / Cancelar / Reabrir) -->
-          </div>
-        </div>
-
-        <!-- Driver and Period Summary -->
-        <div class="grid-4" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Motorista</span>
-            <strong id="settlement-detail-driver" class="text-sm font-bold">-</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Período Apurado</span>
-            <strong id="settlement-detail-period" class="text-sm">-</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Criado Em</span>
-            <span id="settlement-detail-created-at" class="text-sm">-</span>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Data Pagamento</span>
-            <strong id="settlement-detail-paid-at" class="text-sm" style="color: var(--emerald-base);">-</strong>
-          </div>
-        </div>
-
-        <!-- Financial Breakdown (Discriminativo de Valores) -->
-        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color);">
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--brand-light); margin-bottom: 0.85rem;">Discriminativo de Valores</h4>
-          
-          <div class="grid-3" style="gap: 1rem; margin-bottom: 1rem;">
-            <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: 0.5rem;">
-              <span class="text-xs text-muted block">Frete Bruto Total (+)</span>
-              <strong id="settlement-detail-gross" class="text-base font-mono" style="color: var(--emerald-base);">-</strong>
-            </div>
-            <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: 0.5rem;">
-              <span class="text-xs text-muted block">Reembolso Pedágios (+)</span>
-              <strong id="settlement-detail-tolls" class="text-base font-mono" style="color: var(--cyan-base);">-</strong>
-            </div>
-            <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: 0.5rem;">
-              <span class="text-xs text-muted block">Outros Acréscimos (+)</span>
-              <strong id="settlement-detail-additions" class="text-base font-mono" style="color: var(--brand-light);">-</strong>
-            </div>
-          </div>
-
-          <div class="grid-2" style="gap: 1rem; margin-bottom: 1rem;">
-            <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: 0.5rem;">
-              <span class="text-xs text-muted block">Adiantamentos Realizados (-)</span>
-              <strong id="settlement-detail-advances" class="text-base font-mono" style="color: var(--amber-base);">-</strong>
-            </div>
-            <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: 0.5rem;">
-              <span class="text-xs text-muted block">Descontos / Abatimentos (-)</span>
-              <strong id="settlement-detail-deductions" class="text-base font-mono" style="color: var(--rose-base);">-</strong>
-            </div>
-          </div>
-
-          <!-- Total Líquido Highlight -->
-          <div class="flex items-center justify-between" style="background: rgba(16, 185, 129, 0.08); border: 1px solid var(--emerald-base); padding: 1rem; border-radius: 0.75rem;">
-            <div>
-              <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--emerald-base);">Valor Líquido a Pagar</span>
-              <p class="text-xs text-muted">Resultado do cálculo apurado pelo backend HK Connect</p>
-            </div>
-            <p id="settlement-detail-net" class="text-2xl font-bold font-mono" style="color: var(--emerald-base);">-</p>
-          </div>
-        </div>
-
-        <!-- Viagens e Itens Relacionados -->
-        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color);">
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.75rem;">Viagens & Itens no Fechamento</h4>
-          <div class="table-container" style="max-height: 220px; overflow-y: auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Descrição / Tipo</th>
-                  <th>Viagem Relacionada</th>
-                  <th>Data</th>
-                  <th class="text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody id="settlement-detail-items-body">
-                <tr>
-                  <td colspan="4" class="text-center" style="padding: 1rem; color: var(--text-muted);">Nenhum item discriminado.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Histórico de Pagamentos & Comprovantes -->
-        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color);">
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.75rem;">Pagamentos Efetuados & Comprovantes</h4>
-          <div id="settlement-detail-payments-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <p class="text-xs text-muted">Nenhum pagamento registrado.</p>
-          </div>
-        </div>
-
-        <!-- Observações -->
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color);">
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.5rem;">Observações / Notas Internas</h4>
-          <p id="settlement-detail-notes" class="text-xs" style="line-height: 1.6; color: var(--text-primary);">-</p>
-        </div>
-
-        <!-- Formulário de Pagamento / Transição de Status -->
-        <div id="settlement-pay-form-container" class="card" style="padding: 1rem; border: 1px dashed var(--emerald-base); background: rgba(16, 185, 129, 0.05); display: none;">
-          <h4 id="settlement-form-title" class="text-xs font-bold uppercase tracking-wider" style="color: var(--emerald-base); margin-bottom: 0.5rem;">Registrar Pagamento do Fechamento</h4>
-          <input type="hidden" id="settlement-form-id">
-          <input type="hidden" id="settlement-form-target-status">
-
-          <div class="grid-2" style="margin-bottom: 0.75rem;">
-            <div>
-              <label class="text-xs">Método de Pagamento</label>
-              <select id="settlement-form-method" class="input-control">
-                <option value="PIX">Transferência Instantânea (PIX)</option>
-                <option value="TED">Transferência Bancária (TED/DOC)</option>
-                <option value="BOLETO">Boleto Bancário</option>
-                <option value="CASH">Dinheiro / Espécie</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs">Identificador / URL do Comprovante</label>
-              <input type="text" id="settlement-form-receipt" class="input-control" placeholder="ID da transação bancária ou URL">
-            </div>
-          </div>
-
-          <div style="margin-bottom: 0.75rem;">
-            <label class="text-xs">Observações do Pagamento:</label>
-            <textarea id="settlement-form-notes" class="input-control" rows="2" placeholder="Observações opcionais..."></textarea>
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <button type="button" onclick="cancelSettlementForm()" class="btn btn-secondary btn-sm">Cancelar</button>
-            <button type="button" onclick="submitSettlementStatusUpdate()" id="settlement-form-submit-btn" class="btn btn-primary btn-sm">Confirmar Pagamento</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" onclick="closeModal('modal-settlement-details')" class="btn btn-secondary">Fechar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: DETALHES DO EVENTO DE INTEGRAÇÃO ERP -->
-  <div id="modal-erp-event-details" class="modal-overlay hidden">
-    <div class="card modal-content" style="max-width: 800px;">
-      <div class="modal-header">
-        <div class="flex items-center gap-3">
-          <div style="width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--purple-base); display: flex; align-items: center; justify-content: center; color: #fff;">
-            <span data-lucide="server" class="icon-md"></span>
-          </div>
-          <div>
-            <h3 id="erp-detail-title" class="text-base font-bold">Log de Integração ERP</h3>
-            <p id="erp-detail-sub" class="text-xs" style="color: var(--text-secondary);"></p>
-          </div>
-        </div>
-        <button type="button" onclick="closeModal('modal-erp-event-details')" class="btn btn-secondary btn-icon" title="Fechar">
-          <span data-lucide="x" class="icon-sm"></span>
-        </button>
-      </div>
-
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-        <div class="grid-3" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Direção</span>
-            <strong id="erp-detail-direction" class="text-sm font-bold">-</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Status / HTTP</span>
-            <span id="erp-detail-status" class="text-sm">-</span>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Data / Hora</span>
-            <strong id="erp-detail-date" class="text-sm">-</strong>
-          </div>
-        </div>
-
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color);">
-          <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Idempotency Key / Hash</span>
-          <p id="erp-detail-idemp" class="text-xs font-mono" style="color: var(--brand-light); word-break: break-all;">-</p>
-        </div>
-
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color);">
-          <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
-            <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Payload Sanitizado (JSON)</span>
-            <span class="badge badge-purple text-xs">Dados Sensíveis Ocultados</span>
-          </div>
-          <pre id="erp-detail-json" style="background: #090d16; padding: 1rem; border-radius: 0.5rem; color: #38bdf8; font-family: ui-monospace, monospace; font-size: 0.75rem; max-height: 280px; overflow: auto; line-height: 1.5; border: 1px solid var(--border-subtle);"></pre>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" onclick="closeModal('modal-erp-event-details')" class="btn btn-secondary">Fechar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: DETALHES DO LOG DE AUDITORIA -->
-  <div id="modal-audit-details" class="modal-overlay hidden">
-    <div class="card modal-content" style="max-width: 780px;">
-      <div class="modal-header">
-        <div class="flex items-center gap-3">
-          <div style="width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; color: #fff;">
-            <span data-lucide="shield" class="icon-md"></span>
-          </div>
-          <div>
-            <h3 id="audit-detail-title" class="text-base font-bold">Registro de Auditoria</h3>
-            <p id="audit-detail-sub" class="text-xs" style="color: var(--text-secondary);"></p>
-          </div>
-        </div>
-        <button type="button" onclick="closeModal('modal-audit-details')" class="btn btn-secondary btn-icon" title="Fechar">
-          <span data-lucide="x" class="icon-sm"></span>
-        </button>
-      </div>
-
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-        <div class="grid-3" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Usuário Autor</span>
-            <strong id="audit-detail-user" class="text-sm font-bold">-</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Ação Executada</span>
-            <span id="audit-detail-action" class="badge badge-brand text-xs">-</span>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Data e Hora</span>
-            <strong id="audit-detail-date" class="text-sm">-</strong>
-          </div>
-        </div>
-
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color);">
-          <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
-            <span class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Metadados do Registro (Sanitizados)</span>
-            <span class="badge badge-brand text-xs">Auditoria Imutável</span>
-          </div>
-          <pre id="audit-detail-json" style="background: #090d16; padding: 1rem; border-radius: 0.5rem; color: #a5b4fc; font-family: ui-monospace, monospace; font-size: 0.75rem; max-height: 280px; overflow: auto; line-height: 1.5; border: 1px solid var(--border-subtle);"></pre>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" onclick="closeModal('modal-audit-details')" class="btn btn-secondary">Fechar</button>
       </div>
     </div>
   </div>
