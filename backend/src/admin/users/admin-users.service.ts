@@ -534,6 +534,15 @@ export class AdminUsersService {
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
+    const safeExec = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await fn();
+      } catch (err: any) {
+        this.logger.warn(`[getDashboardStats] Subquery fallback: ${err?.message || err}`);
+        return fallback;
+      }
+    };
+
     const [
       totalUsers,
       activeUsers,
@@ -565,91 +574,91 @@ export class AdminUsersService {
       unassignedDrivers,
       unlinkedDriversList,
     ] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.user.count({ where: { status: { in: ['INACTIVE', 'BLOCKED'] } } }),
-      this.prisma.driver.count(),
-      this.prisma.driver.count({ where: { status: 'ATIVO' } }),
-      this.prisma.driver.count({ where: { userId: null } }),
-      this.prisma.driver.count({
+      safeExec(() => this.prisma.user.count(), 0),
+      safeExec(() => this.prisma.user.count({ where: { status: 'ACTIVE' } }), 0),
+      safeExec(() => this.prisma.user.count({ where: { status: { in: ['INACTIVE', 'BLOCKED'] } } }), 0),
+      safeExec(() => this.prisma.driver.count(), 0),
+      safeExec(() => this.prisma.driver.count({ where: { status: 'ATIVO' } }), 0),
+      safeExec(() => this.prisma.driver.count({ where: { userId: null } }), 0),
+      safeExec(() => this.prisma.driver.count({
         where: {
           assignments: {
             none: { isCurrent: true },
           },
         },
-      }),
-      this.prisma.vehicle.count(),
-      this.prisma.vehicle.count({ where: { status: { not: 'INATIVO' } } }),
-      this.prisma.vehicle.count({ where: { status: 'DISPONIVEL' } }),
-      this.prisma.trip.count({ where: { status: { in: ['ASSIGNED', 'PENDING', 'ACCEPTED'] } } }),
-      this.prisma.trip.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.trip.count({ where: { status: 'COMPLETED' } }),
-      this.prisma.trip.count({
+      }), 0),
+      safeExec(() => this.prisma.vehicle.count(), 0),
+      safeExec(() => this.prisma.vehicle.count({ where: { status: { not: 'INATIVO' } } }), 0),
+      safeExec(() => this.prisma.vehicle.count({ where: { status: 'DISPONIVEL' } }), 0),
+      safeExec(() => this.prisma.trip.count({ where: { status: { in: ['ASSIGNED', 'PENDING', 'ACCEPTED'] } } }), 0),
+      safeExec(() => this.prisma.trip.count({ where: { status: 'IN_PROGRESS' } }), 0),
+      safeExec(() => this.prisma.trip.count({ where: { status: 'COMPLETED' } }), 0),
+      safeExec(() => this.prisma.trip.count({
         where: {
           status: 'COMPLETED',
           updatedAt: { gte: todayStart },
         },
-      }),
-      this.prisma.toll.count({ where: { status: 'PENDING' } }),
-      this.prisma.romaneio.count({ where: { status: 'PENDING' } }),
-      this.prisma.occurrence.count({ where: { status: { in: ['OPEN', 'IN_ANALYSIS', 'IN_REVIEW'] } } }),
-      this.prisma.financialSettlement.count({ where: { status: 'PENDING' } }),
-      this.prisma.financialSettlement.aggregate({
+      }), 0),
+      safeExec(() => this.prisma.toll.count({ where: { status: 'PENDING' } }), 0),
+      safeExec(() => this.prisma.romaneio.count({ where: { status: 'PENDING' } }), 0),
+      safeExec(() => this.prisma.occurrence.count({ where: { status: { in: ['OPEN', 'IN_ANALYSIS', 'IN_REVIEW'] } } }), 0),
+      safeExec(() => this.prisma.financialSettlement.count({ where: { status: 'PENDING' } }), 0),
+      safeExec(() => this.prisma.financialSettlement.aggregate({
         where: { status: 'PENDING' },
         _sum: { netAmount: true },
-      }),
-      this.prisma.toll.aggregate({
+      }), { _sum: { netAmount: 0 } }),
+      safeExec(() => this.prisma.toll.aggregate({
         where: { status: 'PENDING' },
         _sum: { amount: true },
-      }),
-      this.prisma.driverLastLocation.count({
+      }), { _sum: { amount: 0 } }),
+      safeExec(() => this.prisma.driverLastLocation.count({
         where: { capturedAt: { gte: fifteenMinutesAgo } },
-      }),
-      this.prisma.idempotencyRecord.count({
+      }), 0),
+      safeExec(() => this.prisma.idempotencyRecord.count({
         where: { statusCode: { gte: 400 } },
-      }),
-      this.prisma.trip.findMany({
+      }), 0),
+      safeExec(() => this.prisma.trip.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true, phone: true } } } },
           vehicle: { select: { plate: true, model: true, brand: true } },
         },
-      }),
-      this.prisma.trip.findMany({
+      }), []),
+      safeExec(() => this.prisma.trip.findMany({
         where: { status: 'IN_PROGRESS' },
         take: 8,
-        orderBy: { startDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true, phone: true } } } },
           vehicle: { select: { plate: true, model: true } },
         },
-      }),
-      this.prisma.occurrence.findMany({
+      }), []),
+      safeExec(() => this.prisma.occurrence.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true } } } },
           trip: { select: { tripCode: true } },
         },
-      }),
-      this.prisma.toll.findMany({
+      }), []),
+      safeExec(() => this.prisma.toll.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true } } } },
           trip: { select: { tripCode: true } },
         },
-      }),
-      this.prisma.romaneio.findMany({
+      }), []),
+      safeExec(() => this.prisma.romaneio.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
           driver: { include: { user: { select: { name: true } } } },
           trip: { select: { tripCode: true } },
         },
-      }),
-      this.prisma.driver.findMany({
+      }), []),
+      safeExec(() => this.prisma.driver.findMany({
         where: {
           assignments: {
             none: { isCurrent: true },
@@ -659,18 +668,18 @@ export class AdminUsersService {
         include: {
           user: { select: { id: true, name: true, phone: true, cpf: true } },
         },
-      }),
-      this.prisma.driver.findMany({
+      }), []),
+      safeExec(() => this.prisma.driver.findMany({
         where: { userId: null },
         take: 8,
         orderBy: { createdAt: 'desc' },
-      }),
+      }), []),
     ]);
 
     const availableDrivers = Math.max(0, activeDrivers - inProgressTrips);
     const driversNoSignalCount = Math.max(0, activeDrivers - recentLocationsCount);
-    const pendingSettlementsAmount = pendingSettlementsAggregate._sum.netAmount || 0;
-    const pendingTollsAmount = pendingTollsAggregate._sum.amount || 0;
+    const pendingSettlementsAmount = pendingSettlementsAggregate?._sum?.netAmount || 0;
+    const pendingTollsAmount = pendingTollsAggregate?._sum?.amount || 0;
 
     return {
       totalUsers,
