@@ -3277,7 +3277,9 @@ export const ADMIN_JS_TEMPLATE = `
     const valEl = document.getElementById('manual-nf-value');
     if (valEl) valEl.value = '500.00';
 
-    generateRandomManualNfKey();
+    const keyEl = document.getElementById('manual-nf-key');
+    if (keyEl) keyEl.value = '';
+
     renderIcons();
     openModal('modal-create-manual-invoice');
   }

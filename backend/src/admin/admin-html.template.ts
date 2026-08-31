@@ -3136,14 +3136,8 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             </div>
 
             <div>
-              <div class="flex items-center justify-between" style="margin-bottom: 0.25rem;">
-                <label style="margin-bottom: 0;">Chave de Acesso (44 dígitos - Opcional)</label>
-                <button type="button" onclick="generateRandomManualNfKey()" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
-                  <span data-lucide="sparkles" class="icon-xs"></span>
-                  <span>Gerar Chave Automática</span>
-                </button>
-              </div>
-              <input type="text" id="manual-nf-key" class="input-control font-mono text-xs" placeholder="Deixe em branco para gerar chave válida de contingência automaticamente" maxlength="44">
+              <label>Chave de Acesso NF-e (Opcional p/ cadastro MANUAL)</label>
+              <input type="text" id="manual-nf-key" class="input-control font-mono text-xs" placeholder="Opcional — informe apenas se possuir chave de 44 dígitos da NF-e" maxlength="44">
             </div>
           </div>
 
