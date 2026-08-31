@@ -15,6 +15,18 @@ import { Role, TripStatus, RomaneioStatus, TollStatus, InvoiceStatus } from '@pr
 export class AdminDashboardController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
+  @Get('build-info')
+  @ApiOperation({ summary: 'Diagnóstico de build e versão do painel' })
+  async getBuildInfo() {
+    return {
+      app: 'HK Connect',
+      adminBuild: 'HK-ADMIN-ROUTE-WIZARD-01',
+      buildTimestamp: new Date().toISOString(),
+      railwayCommitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+      nodeEnv: process.env.NODE_ENV || 'development',
+    };
+  }
+
   @Get('dashboard')
   @ApiOperation({ summary: 'Obter indicadores e listas rápidas do painel operacional' })
   async getDashboardStats() {

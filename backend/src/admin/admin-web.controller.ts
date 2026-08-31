@@ -6,6 +6,18 @@ import { ADMIN_JS_TEMPLATE } from './admin-js.template';
 
 @Controller('admin')
 export class AdminWebController {
+  @Get('build-info')
+  @ApiExcludeEndpoint()
+  getBuildInfo() {
+    return {
+      app: 'HK Connect',
+      adminBuild: 'HK-ADMIN-ROUTE-WIZARD-01',
+      buildTimestamp: new Date().toISOString(),
+      railwayCommitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+      nodeEnv: process.env.NODE_ENV || 'development',
+    };
+  }
+
   @Get(['', '/', 'dashboard', 'users', 'drivers', 'vehicles', 'trips'])
   @ApiExcludeEndpoint()
   serveAdminApp(@Res() res: Response) {

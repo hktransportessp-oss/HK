@@ -3,6 +3,7 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="hk-admin-build" content="HK-ADMIN-ROUTE-WIZARD-01">
   <title>HK Connect — Painel Operacional Central</title>
   <style>
     /* CSS RESET & THEME VARIABLES */
@@ -594,6 +595,9 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
           <span data-lucide="log-out" class="icon-sm"></span>
           <span>Sair da Conta</span>
         </button>
+        <div style="margin-top: 0.5rem; text-align: center; font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">
+          BUILD: HK-ADMIN-ROUTE-WIZARD-01
+        </div>
       </div>
     </aside>
 
@@ -994,12 +998,12 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
           <div class="flex items-center gap-2" style="flex-wrap: wrap;">
             <button onclick="handleSyncErpInvoices()" id="btn-sync-erp-nfs" class="btn btn-secondary" title="Sincronizar NFs recebidas no ERP">
               <span data-lucide="refresh-cw" class="icon-xs"></span>
-              <span>Sincronizar ERP</span>
+              <span>SINCRONIZAR ERP</span>
             </button>
 
             <button onclick="openCreateManualInvoiceModal()" id="btn-create-manual-nf" class="btn btn-secondary" style="border-color: var(--emerald-base); color: var(--emerald-base);" title="Cadastrar NF manualmente em contingência">
               <span data-lucide="plus-circle" class="icon-xs"></span>
-              <span>Nova Nota Fiscal</span>
+              <span>+ NOVA NOTA FISCAL</span>
             </button>
 
             <button onclick="openRouteDispatchWizard()" id="btn-create-trip-from-nfs" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);">
