@@ -2278,7 +2278,45 @@ export class AdminUsersService {
       grp.invoices.push(inv);
     }
 
-    const groupedStops = Array.from(stopMap.values());
+    const groupedStopsDefault = Array.from(stopMap.values());
+    let groupedStops: GroupedStop[] = [];
+
+    if (dto.stops && Array.isArray(dto.stops) && dto.stops.length > 0) {
+      groupedStops = dto.stops.map((st) => {
+        const stopInvoices = invoices.filter((inv) =>
+          st.invoiceIds && Array.isArray(st.invoiceIds)
+            ? st.invoiceIds.includes(inv.id)
+            : (inv.recipient === st.recipient && (inv.address || '') === (st.address || ''))
+        );
+        const invsToUse = stopInvoices.length > 0 ? stopInvoices : invoices;
+        const totalVolume = invsToUse.reduce((sum, i) => sum + (i.volumeCount || 1), 0);
+        const totalWeight = invsToUse.reduce((sum, i) => sum + (i.weight || 0), 0);
+        const totalValue = invsToUse.reduce((sum, i) => sum + (i.value || 0), 0);
+
+        return {
+          recipient: st.recipient || invsToUse[0]?.recipient || 'Destinatário',
+          recipientDocument: st.recipientDocument || invsToUse[0]?.recipientDocument || null,
+          address: st.address || invsToUse[0]?.address || 'Endereço de Entrega',
+          numberAddress: st.numberAddress || invsToUse[0]?.numberAddress || null,
+          complement: st.complement || invsToUse[0]?.complement || null,
+          neighborhood: st.neighborhood || invsToUse[0]?.neighborhood || null,
+          city: st.city || invsToUse[0]?.city || 'São Paulo',
+          state: st.state || invsToUse[0]?.state || 'SP',
+          postalCode: st.postalCode || invsToUse[0]?.postalCode || null,
+          latitude: st.latitude || invsToUse[0]?.latitude || null,
+          longitude: st.longitude || invsToUse[0]?.longitude || null,
+          totalVolume,
+          totalWeight,
+          totalValue,
+          invoices: invsToUse,
+          deliveryWindowStart: st.deliveryWindowStart || invsToUse[0]?.deliveryWindowStart || '08:00',
+          deliveryWindowEnd: st.deliveryWindowEnd || invsToUse[0]?.deliveryWindowEnd || '18:00',
+        };
+      });
+    } else {
+      groupedStops = groupedStopsDefault;
+    }
+
     const lastStop = groupedStops[groupedStops.length - 1];
     const destination = lastStop
       ? `${lastStop.recipient} - ${lastStop.city}/${lastStop.state}`

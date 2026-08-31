@@ -1002,9 +1002,9 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
               <span>Nova Nota Fiscal</span>
             </button>
 
-            <button onclick="openCreateTripFromSelectedInvoicesModal()" id="btn-create-trip-from-nfs" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);" disabled>
+            <button onclick="openRouteDispatchWizard()" id="btn-create-trip-from-nfs" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);">
               <span data-lucide="navigation" class="icon-sm"></span>
-              <span>CRIAR ROTA COM NFs (<span id="selected-invoices-count">0</span>)</span>
+              <span>CRIAR ROTA COM NFs SELECIONADAS (<span id="selected-invoices-count">0</span>)</span>
             </button>
           </div>
         </div>
@@ -1136,9 +1136,9 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             </p>
           </div>
 
-          <button onclick="openCreateTripModal()" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.95rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);">
+          <button onclick="openRouteDispatchWizard()" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.95rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);">
             <span data-lucide="plus-circle" class="icon-sm"></span>
-            <span>+ NOVA VIAGEM / ROTA</span>
+            <span>+ NOVA ROTA</span>
           </button>
         </div>
 
@@ -2787,124 +2787,307 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- MODAL: CRIAR ROTA COM NOTAS FISCAIS SELECIONADAS -->
-  <div id="modal-create-trip-from-invoices" class="modal-overlay hidden">
-    <div class="card modal-content" style="max-width: 880px; max-height: 90vh; display: flex; flex-direction: column;">
+  <!-- MODAL: WIZARD OPERACIONAL DE DESPACHO DE ROTAS (4 ETAPAS COMPLETAS) -->
+  <div id="modal-dispatch-route-wizard" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 960px; max-height: 92vh; display: flex; flex-direction: column;">
+      <!-- Header -->
       <div class="modal-header">
         <div class="flex items-center gap-3">
-          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; color: #fff;">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
             <span data-lucide="navigation" class="icon-md"></span>
           </div>
           <div>
-            <h3 class="text-base font-bold">Criar Nova Rota a partir de Notas Fiscais</h3>
-            <p class="text-xs" style="color: var(--text-secondary);">Agrupamento automático por destinatário e local de entrega para despacho ao motorista.</p>
+            <h3 class="text-base font-bold">Montagem e Despacho de Rota Operacional</h3>
+            <p class="text-xs" style="color: var(--text-secondary);">Fluxo ponta a ponta: Seleção de NFs &rarr; Agrupamento de Paradas &rarr; Motorista/Veículo &rarr; Despacho ao Android.</p>
           </div>
         </div>
-        <button type="button" onclick="closeModal('modal-create-trip-from-invoices')" class="btn btn-secondary btn-icon" title="Fechar">
+        <button type="button" onclick="closeModal('modal-dispatch-route-wizard')" class="btn btn-secondary btn-icon" title="Fechar">
           <span data-lucide="x" class="icon-sm"></span>
         </button>
       </div>
 
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1;">
-        <!-- Resumo da Carga / NFs Selecionadas -->
-        <div class="grid-4" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">NFs Selecionadas</span>
-            <strong id="nf-modal-count" class="text-base font-mono" style="color: var(--brand-light);">0 NFs</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Destinatários / Paradas</span>
-            <strong id="nf-modal-stops-count" class="text-base font-mono">0 paradas</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Total Volumes / Peso</span>
-            <strong id="nf-modal-total-weight-vol" class="text-base font-mono">-</strong>
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted); display: block;">Valor Total das NFs</span>
-            <strong id="nf-modal-total-value" class="text-base font-mono" style="color: var(--emerald-base);">-</strong>
-          </div>
-        </div>
+      <!-- Stepper Navigation (4 Etapas) -->
+      <div style="display: flex; border-bottom: 1px solid var(--border-color); background: var(--bg-surface-elevated);">
+        <button type="button" id="wiz-tab-1" onclick="switchWizStep(1)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid var(--brand-light); background: transparent; color: var(--text-primary); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          1. Selecionar NFs (<span id="wiz-tab1-count">0</span>)
+        </button>
+        <button type="button" id="wiz-tab-2" onclick="switchWizStep(2)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          2. Gerar Paradas (<span id="wiz-tab2-count">0</span>)
+        </button>
+        <button type="button" id="wiz-tab-3" onclick="switchWizStep(3)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          3. Motorista &amp; Veículo
+        </button>
+        <button type="button" id="wiz-tab-4" onclick="switchWizStep(4)" class="btn" style="flex: 1; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; padding: 0.75rem;">
+          4. Dados da Rota &amp; Despacho
+        </button>
+      </div>
 
-        <!-- Paradas Geradas (Visualização e Sequenciamento) -->
-        <div>
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted); margin-bottom: 0.5rem;">Paradas & Entregas Agrupadas</h4>
-          <div class="table-container" style="max-height: 200px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+      <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem;">
+
+        <!-- ============================================== -->
+        <!-- ETAPA 1: SELECIONAR NOTAS FISCAIS -->
+        <!-- ============================================== -->
+        <div id="wiz-step-1" style="display: flex; flex-direction: column; gap: 1rem;">
+          <!-- Top Resumo Bar -->
+          <div class="grid-4" style="background: var(--bg-surface-elevated); padding: 0.85rem 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <div>
+              <span class="text-xs" style="color: var(--text-muted); display: block;">NFs Selecionadas</span>
+              <strong id="wiz-nfs-summary-count" class="text-base font-mono" style="color: var(--brand-light);">0 NFs</strong>
+            </div>
+            <div>
+              <span class="text-xs" style="color: var(--text-muted); display: block;">Total Volumes</span>
+              <strong id="wiz-nfs-summary-vol" class="text-base font-mono">0 vol</strong>
+            </div>
+            <div>
+              <span class="text-xs" style="color: var(--text-muted); display: block;">Peso Estimado</span>
+              <strong id="wiz-nfs-summary-wt" class="text-base font-mono">0.0 kg</strong>
+            </div>
+            <div>
+              <span class="text-xs" style="color: var(--text-muted); display: block;">Valor Total das Cargas</span>
+              <strong id="wiz-nfs-summary-val" class="text-base font-mono" style="color: var(--emerald-base);">R$ 0,00</strong>
+            </div>
+          </div>
+
+          <!-- Filtros de Busca & Ações Rápidas de NFs -->
+          <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
+            <div class="flex items-center gap-2" style="flex: 1; min-width: 260px;">
+              <div class="input-with-icon" style="flex: 1;">
+                <span class="input-icon" data-lucide="search"></span>
+                <input type="text" id="wiz-nfs-search-input" class="input-control" placeholder="Buscar por NF, Destinatário, Cidade..." oninput="renderWizNfsTable()">
+              </div>
+
+              <select id="wiz-nfs-origin-filter" class="input-control" style="width: auto; min-width: 140px;" onchange="renderWizNfsTable()">
+                <option value="">Todas Origens</option>
+                <option value="ERP">Apenas ERP</option>
+                <option value="MANUAL">Apenas Manual</option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="wizSelectAllAvailableNfs()" class="btn btn-secondary btn-sm" title="Marcar todas as NFs disponíveis para roteirização">
+                <span data-lucide="check-square" class="icon-xs"></span>
+                <span>Marcar Todas</span>
+              </button>
+              <button type="button" onclick="wizDeselectAllNfs()" class="btn btn-secondary btn-sm" title="Limpar seleção de NFs">
+                <span data-lucide="square" class="icon-xs"></span>
+                <span>Desmarcar</span>
+              </button>
+              <button type="button" onclick="openCreateManualInvoiceModal()" class="btn btn-secondary btn-sm" style="border-color: var(--emerald-base); color: var(--emerald-base);" title="Cadastrar nova NF avulsa">
+                <span data-lucide="plus-circle" class="icon-xs"></span>
+                <span>+ NF Manual</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabela de NFs Disponíveis -->
+          <div class="table-container" style="max-height: 280px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
             <table>
               <thead>
                 <tr>
-                  <th style="width: 50px;">Seq.</th>
-                  <th>Destinatário</th>
-                  <th>Endereço / Cidade</th>
-                  <th>Volumes / Peso / Valor</th>
-                  <th>NFs Vinculadas</th>
+                  <th style="width: 40px; text-align: center;">
+                    <input type="checkbox" id="wiz-nfs-master-checkbox" onchange="handleWizMasterCheckboxChange(this)">
+                  </th>
+                  <th>NF-e / Série</th>
+                  <th>Destinatário / Doc</th>
+                  <th>Endereço de Entrega</th>
+                  <th>Cidade/UF</th>
+                  <th>Vol / Peso</th>
+                  <th>Valor</th>
+                  <th>Origem</th>
                 </tr>
               </thead>
-              <tbody id="nf-modal-grouped-stops-table">
-                <tr><td colspan="5" class="text-center text-xs" style="padding: 1rem; color: var(--text-muted);">Nenhuma NF selecionada.</td></tr>
+              <tbody id="wiz-nfs-table-body">
+                <tr><td colspan="8" class="text-center text-xs" style="padding: 1.5rem; color: var(--text-muted);">Carregando Notas Fiscais disponíveis...</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
 
-        <!-- Atribuição Operacional: Motorista, Veículo, Código da Rota e Origem -->
-        <div class="card" style="padding: 1rem; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;">
-          <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--brand-light);">Configuração da Rota Operacional</h4>
-          
-          <div class="grid-2">
-            <div>
-              <label>Código da Viagem / Rota *</label>
-              <input type="text" id="nf-modal-trip-code" class="input-control font-mono font-bold" required placeholder="HK-2026-0001">
-            </div>
-
-            <div>
-              <label>Data / Hora Programada de Saída *</label>
-              <input type="datetime-local" id="nf-modal-start-date" class="input-control" required>
-            </div>
-          </div>
-
-          <div class="grid-2">
-            <div>
-              <label>Motorista Responsável (Opcional p/ Rascunho)</label>
-              <select id="nf-modal-driver-select" class="input-control">
-                <option value="">Selecione o motorista...</option>
-              </select>
-            </div>
-
-            <div>
-              <label>Veículo Alocado (Opcional p/ Rascunho)</label>
-              <select id="nf-modal-vehicle-select" class="input-control">
-                <option value="">Selecione o veículo...</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label>Origem da Viagem (CD / Hub Logístico)</label>
-            <input type="text" id="nf-modal-origin" class="input-control" value="CD HK Transportes - Av. dos Autonomistas, 1200, Osasco - SP">
-          </div>
-
-          <div>
-            <label>Observações Operacionais</label>
-            <input type="text" id="nf-modal-notes" class="input-control" placeholder="Orientações para o motorista, manuseio de carga, conferência...">
+          <!-- Step 1 Footer -->
+          <div class="flex items-center justify-between" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <button type="button" onclick="closeModal('modal-dispatch-route-wizard')" class="btn btn-secondary">Cancelar</button>
+            <button type="button" onclick="switchWizStep(2)" class="btn btn-primary">
+              <span>Avançar para Gerar Paradas</span>
+              <span data-lucide="arrow-right" class="icon-sm"></span>
+            </button>
           </div>
         </div>
-      </div>
 
-      <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between;">
-        <button type="button" onclick="closeModal('modal-create-trip-from-invoices')" class="btn btn-secondary">Cancelar</button>
-        
-        <div class="flex items-center gap-2">
-          <button type="button" onclick="submitTripFromInvoices('DRAFT')" class="btn btn-secondary" style="border-color: var(--brand-light); color: var(--brand-light);">
-            <span data-lucide="file-text" class="icon-xs"></span>
-            <span>Salvar como Rascunho</span>
-          </button>
+        <!-- ============================================== -->
+        <!-- ETAPA 2: GERAR & REORGANIZAR PARADAS -->
+        <!-- ============================================== -->
+        <div id="wiz-step-2" class="hidden" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="card" style="padding: 0.85rem 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; items-center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <span class="text-xs" style="color: var(--text-muted); display: block;">Agrupamento Inteligente da Rota</span>
+              <strong id="wiz-stops-summary-badge" class="text-sm font-bold" style="color: var(--brand-light);">0 paradas agrupadas a partir de 0 NFs</strong>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <div>Total Carga: <strong id="wiz-stops-total-vol-wt" class="font-mono">-</strong></div>
+              <div>Valor Carga: <strong id="wiz-stops-total-val" class="font-mono" style="color: var(--emerald-base);">-</strong></div>
+            </div>
+          </div>
 
-          <button type="button" onclick="submitTripFromInvoices('ASSIGN')" class="btn btn-primary">
-            <span data-lucide="navigation" class="icon-xs"></span>
-            <span>Criar e Despachar Rota</span>
-          </button>
+          <p class="text-xs" style="color: var(--text-secondary);">
+            As Notas Fiscais foram agrupadas por destinatário e endereço. Utilize os botões de subir (<span data-lucide="arrow-up" style="width:12px;height:12px;display:inline-block;"></span>) e descer (<span data-lucide="arrow-down" style="width:12px;height:12px;display:inline-block;"></span>) para reorganizar a sequência de entrega da viagem.
+          </p>
+
+          <!-- Tabela de Paradas Agrupadas com Reordenação -->
+          <div class="table-container" style="max-height: 300px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 70px; text-align: center;">Sequência</th>
+                  <th>Destinatário / Razão Social</th>
+                  <th>Endereço Completo de Entrega</th>
+                  <th>Cidade/UF</th>
+                  <th>Volumes / Peso / Valor</th>
+                  <th>NFs Vinculadas à Parada</th>
+                </tr>
+              </thead>
+              <tbody id="wiz-stops-table-body">
+                <tr><td colspan="6" class="text-center text-xs" style="padding: 1.5rem; color: var(--text-muted);">Nenhuma parada configurada.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Step 2 Footer -->
+          <div class="flex items-center justify-between" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <button type="button" onclick="switchWizStep(1)" class="btn btn-secondary">
+              <span data-lucide="arrow-right" class="icon-sm" style="transform: rotate(180deg);"></span>
+              <span>Voltar para Seleção de NFs</span>
+            </button>
+            <button type="button" onclick="switchWizStep(3)" class="btn btn-primary">
+              <span>Avançar para Motorista &amp; Veículo</span>
+              <span data-lucide="arrow-right" class="icon-sm"></span>
+            </button>
+          </div>
         </div>
+
+        <!-- ============================================== -->
+        <!-- ETAPA 3: MOTORISTA & VEÍCULO -->
+        <!-- ============================================== -->
+        <div id="wiz-step-3" class="hidden" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--brand-light);">
+              <span data-lucide="user-check" class="icon-sm"></span>
+              <span>Atribuição Operacional do Motorista e Veículo</span>
+            </h4>
+
+            <div class="grid-2">
+              <div>
+                <label>Motorista Operacional *</label>
+                <select id="wiz-driver-select" class="input-control" onchange="handleWizDriverChange()">
+                  <option value="">Selecione o motorista (ou deixe vazio para rascunho)...</option>
+                </select>
+                <span class="text-xs" style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                  Apenas motoristas ativos e habilitados no sistema.
+                </span>
+              </div>
+
+              <div>
+                <label>Veículo da Frota *</label>
+                <select id="wiz-vehicle-select" class="input-control" onchange="handleWizVehicleChange()">
+                  <option value="">Selecione o veículo...</option>
+                </select>
+                <span class="text-xs" style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                  Preenchido automaticamente com o veículo do motorista.
+                </span>
+              </div>
+            </div>
+
+            <!-- Driver Conflict Banner -->
+            <div id="wiz-driver-warning-banner" class="hidden" style="padding: 0.85rem 1rem; border-radius: 0.75rem; background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-base); font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span data-lucide="alert-triangle" class="icon-sm" style="flex-shrink:0;"></span>
+              <span id="wiz-driver-warning-text">Atenção: Motorista já possui uma viagem ativa em andamento.</span>
+            </div>
+
+            <!-- Driver Details Box -->
+            <div id="wiz-driver-info-box" class="hidden" style="padding: 0.85rem 1rem; border-radius: 0.75rem; background: var(--bg-surface); border: 1px solid var(--border-color); font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+              <div><span class="text-xs text-muted block">Nome:</span> <strong id="wiz-driver-info-name">-</strong></div>
+              <div><span class="text-xs text-muted block">CPF:</span> <strong id="wiz-driver-info-cpf">-</strong></div>
+              <div><span class="text-xs text-muted block">Telefone:</span> <strong id="wiz-driver-info-phone">-</strong></div>
+              <div><span class="text-xs text-muted block">CNH:</span> <strong id="wiz-driver-info-cnh">-</strong></div>
+            </div>
+          </div>
+
+          <!-- Step 3 Footer -->
+          <div class="flex items-center justify-between" style="padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <button type="button" onclick="switchWizStep(2)" class="btn btn-secondary">
+              <span data-lucide="arrow-right" class="icon-sm" style="transform: rotate(180deg);"></span>
+              <span>Voltar para Paradas</span>
+            </button>
+            <button type="button" onclick="switchWizStep(4)" class="btn btn-primary">
+              <span>Avançar para Dados da Rota</span>
+              <span data-lucide="arrow-right" class="icon-sm"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- ETAPA 4: DADOS DA ROTA & CONFIRMAÇÃO / DESPACHO -->
+        <!-- ============================================== -->
+        <div id="wiz-step-4" class="hidden" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--brand-light);">
+              <span data-lucide="file-check" class="icon-sm"></span>
+              <span>Identificação e Programação da Viagem</span>
+            </h4>
+
+            <div class="grid-2">
+              <div>
+                <label>Código da Viagem / Rota *</label>
+                <input type="text" id="wiz-trip-code" class="input-control font-mono font-bold" required placeholder="HK-2026-0001">
+              </div>
+
+              <div>
+                <label>Data / Hora Programada de Saída *</label>
+                <input type="datetime-local" id="wiz-start-date" class="input-control" required>
+              </div>
+            </div>
+
+            <div>
+              <label>Origem da Viagem (CD / Hub Logístico) *</label>
+              <input type="text" id="wiz-origin" class="input-control" value="CD HK Transportes - Av. dos Autonomistas, 1200, Osasco - SP">
+            </div>
+
+            <div>
+              <label>Observações Operacionais para o Motorista</label>
+              <textarea id="wiz-notes" class="input-control" rows="2" placeholder="Instruções de carregamento, conferência de lacre, orientações de entrega..."></textarea>
+            </div>
+          </div>
+
+          <!-- Resumo Consolidado Pré-Despacho -->
+          <div class="card" style="padding: 1rem; background: linear-gradient(135deg, rgba(37,99,235,0.08), rgba(16,185,129,0.05)); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.75rem;">
+            <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Resumo de Fechamento do Despacho</h4>
+            <div class="grid-4 text-xs">
+              <div><span class="text-muted block">Motorista:</span> <strong id="wiz-final-driver">-</strong></div>
+              <div><span class="text-muted block">Veículo:</span> <strong id="wiz-final-vehicle">-</strong></div>
+              <div><span class="text-muted block">Paradas &amp; NFs:</span> <strong id="wiz-final-stops-nfs">-</strong></div>
+              <div><span class="text-muted block">Destino Final:</span> <strong id="wiz-final-destination">-</strong></div>
+            </div>
+          </div>
+
+          <!-- Step 4 Footer / Main Submit Actions -->
+          <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0 0 0; margin-top: 0;">
+            <button type="button" onclick="switchWizStep(3)" class="btn btn-secondary">
+              <span data-lucide="arrow-right" class="icon-sm" style="transform: rotate(180deg);"></span>
+              <span>Voltar</span>
+            </button>
+
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="submitWizTrip('DRAFT')" class="btn btn-secondary" style="border-color: var(--brand-light); color: var(--brand-light);" title="Salvar rota com status PENDING para despacho posterior">
+                <span data-lucide="file-text" class="icon-sm"></span>
+                <span>Salvar Rascunho</span>
+              </button>
+
+              <button type="button" onclick="submitWizTrip('ASSIGN')" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-weight: 700; box-shadow: 0 4px 16px rgba(37,99,235,0.4);" title="Criar a viagem, vincular paradas/NFs e despachar imediatamente para o Android">
+                <span data-lucide="send" class="icon-sm"></span>
+                <span>Enviar Rota ao Motorista</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>

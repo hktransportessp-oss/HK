@@ -2637,74 +2637,296 @@ export const ADMIN_JS_TEMPLATE = `
   }
 
   // ==============================================
-  // CRIAÇÃO DE ROTA A PARTIR DE NOTAS FISCAIS SELECIONADAS
+  // WIZARD OPERACIONAL DE DESPACHO DE ROTAS (4 ETAPAS COMPLETAS)
   // ==============================================
-  async function openCreateTripFromSelectedInvoicesModal() {
-    const selectedIds = Array.from(STATE.selectedInvoiceIds);
-    if (selectedIds.length === 0) {
-      showToast('Selecione pelo menos uma Nota Fiscal para criar a rota.', 'error');
-      return;
+  STATE.wiz = {
+    currentStep: 1,
+    selectedNfIds: new Set(),
+    stops: [],
+    driversList: [],
+    vehiclesList: []
+  };
+
+  async function openRouteDispatchWizard() {
+    STATE.wiz.currentStep = 1;
+
+    // Se houver NFs selecionadas na tela de Notas Fiscais, inicializar com elas
+    if (STATE.selectedInvoiceIds && STATE.selectedInvoiceIds.size > 0) {
+      STATE.wiz.selectedNfIds = new Set(STATE.selectedInvoiceIds);
+    } else if (!STATE.wiz.selectedNfIds) {
+      STATE.wiz.selectedNfIds = new Set();
     }
 
-    const selectedInvoices = (STATE.invoices || []).filter(i => selectedIds.includes(i.id));
-    if (selectedInvoices.length === 0) {
-      showToast('Nenhuma das Notas Fiscais selecionadas foi localizada.', 'error');
-      return;
+    // Carregar NFs caso ainda não estejam carregadas
+    if (!STATE.invoices || STATE.invoices.length === 0) {
+      try {
+        await loadInvoices();
+      } catch (e) {
+        console.warn('Erro ao pré-carregar NFs:', e);
+      }
     }
 
-    // Carregar Motoristas e Veículos para os selects se ainda não carregados
+    // Carregar Motoristas e Veículos
     try {
       if (!STATE.drivers || STATE.drivers.length === 0) {
         STATE.drivers = await apiFetch('/api/v1/admin/drivers');
       }
+      STATE.wiz.driversList = STATE.drivers || [];
+
       if (!STATE.vehicles || STATE.vehicles.length === 0) {
         STATE.vehicles = await apiFetch('/api/v1/admin/vehicles');
       }
+      STATE.wiz.vehiclesList = STATE.vehicles || [];
     } catch (e) {
-      console.warn('Erro ao carregar motoristas/veículos para rota:', e);
+      console.warn('Erro ao carregar dados de motoristas/veículos para o wizard:', e);
     }
 
-    // Preencher Select de Motoristas
-    const driverSelect = document.getElementById('nf-modal-driver-select');
-    if (driverSelect) {
-      const activeDrivers = (STATE.drivers || []).filter(d => d.status === 'ATIVO' || d.status === 'DISPONIVEL' || !d.status);
-      driverSelect.innerHTML = '<option value="">Selecione o motorista (ou deixe vazio p/ rascunho)...</option>' +
-        activeDrivers.map(d => {
-          const name = d.user?.name || ('Motorista ' + (d.cnh || d.id.slice(0, 6)));
-          const cnh = d.cnh ? ' - CNH: ' + d.cnh : '';
-          return '<option value="' + d.id + '">' + name + cnh + '</option>';
-        }).join('');
-    }
-
-    // Preencher Select de Veículos
-    const vehicleSelect = document.getElementById('nf-modal-vehicle-select');
-    if (vehicleSelect) {
-      const activeVehicles = (STATE.vehicles || []).filter(v => v.status !== 'INATIVO' && v.status !== 'MANUTENCAO');
-      vehicleSelect.innerHTML = '<option value="">Selecione o veículo...</option>' +
-        activeVehicles.map(v => {
-          return '<option value="' + v.id + '">' + v.plate + ' - ' + v.model + ' (' + v.type + ')</option>';
-        }).join('');
-    }
-
-    // Auto-preencher código da rota e data padrão (hoje + 1h)
+    // Gerar código único para a rota (ex: HK-YYYYMMDD-XXXX)
     const now = new Date();
-    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const rand = Math.floor(1000 + Math.random() * 9000);
-    const codeEl = document.getElementById('nf-modal-trip-code');
-    if (codeEl) codeEl.value = 'HK-' + dateStr + '-' + rand;
+    const tripCodeEl = document.getElementById('wiz-trip-code');
+    if (tripCodeEl) tripCodeEl.value = 'HK-' + dateStr + '-' + rand;
 
-    const startDateEl = document.getElementById('nf-modal-start-date');
+    // Horário programado padrão: agora + 1 hora
+    const startDateEl = document.getElementById('wiz-start-date');
     if (startDateEl) {
       const plusOneHour = new Date(Date.now() + 60 * 60 * 1000);
       const iso = new Date(plusOneHour.getTime() - plusOneHour.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       startDateEl.value = iso;
     }
 
-    // Agrupamento Inteligente por Destinatário + Endereço
-    const stopMap = new Map();
+    // Limpar filtros de busca da Etapa 1
+    const searchInput = document.getElementById('wiz-nfs-search-input');
+    if (searchInput) searchInput.value = '';
+    const originFilter = document.getElementById('wiz-nfs-origin-filter');
+    if (originFilter) originFilter.value = '';
+
+    // Preencher Selects de Motorista e Veículo na Etapa 3
+    populateWizDriversAndVehicles();
+
+    // Iniciar na Etapa 1
+    switchWizStep(1);
+    openModal('modal-dispatch-route-wizard');
+  }
+
+  function openCreateTripFromSelectedInvoicesModal() {
+    return openRouteDispatchWizard();
+  }
+
+  function openCreateTripModal() {
+    return openRouteDispatchWizard();
+  }
+
+  function switchWizStep(step) {
+    if (step < 1) step = 1;
+    if (step > 4) step = 4;
+
+    // Validação ao tentar avançar da Etapa 1
+    if (step > 1 && (!STATE.wiz.selectedNfIds || STATE.wiz.selectedNfIds.size === 0)) {
+      showToast('Selecione pelo menos uma Nota Fiscal para avançar na montagem da rota.', 'warning');
+      return;
+    }
+
+    STATE.wiz.currentStep = step;
+
+    // Alternar visibilidade das abas
+    for (let i = 1; i <= 4; i++) {
+      const stepDiv = document.getElementById('wiz-step-' + i);
+      const tabBtn = document.getElementById('wiz-tab-' + i);
+
+      if (stepDiv) {
+        if (i === step) {
+          stepDiv.classList.remove('hidden');
+          stepDiv.style.display = 'flex';
+        } else {
+          stepDiv.classList.add('hidden');
+          stepDiv.style.display = 'none';
+        }
+      }
+
+      if (tabBtn) {
+        if (i === step) {
+          tabBtn.style.borderBottom = '2px solid var(--brand-light)';
+          tabBtn.style.color = 'var(--text-primary)';
+        } else {
+          tabBtn.style.borderBottom = '2px solid transparent';
+          tabBtn.style.color = 'var(--text-muted)';
+        }
+      }
+    }
+
+    // Ações específicas de cada etapa
+    if (step === 1) {
+      renderWizNfsTable();
+    } else if (step === 2) {
+      buildWizStopsFromSelectedNfs();
+      renderWizStopsTable();
+    } else if (step === 3) {
+      handleWizDriverChange();
+    } else if (step === 4) {
+      updateWizFinalSummary();
+    }
+
+    renderIcons();
+  }
+
+  function getWizAvailableInvoices() {
+    const all = STATE.invoices || [];
+    const search = (document.getElementById('wiz-nfs-search-input')?.value || '').trim().toLowerCase();
+    const origin = document.getElementById('wiz-nfs-origin-filter')?.value || '';
+
+    return all.filter(inv => {
+      // Apenas NFs válidas para rota (não canceladas e sem rota ativa)
+      const isAvailable = inv.isAvailableForRouting || inv.operationalStatus === 'AVAILABLE' || (!inv.tripId && inv.fiscalStatus !== 'CANCELLED');
+      if (!isAvailable) return false;
+
+      if (origin && (inv.source || 'ERP') !== origin) return false;
+
+      if (search) {
+        const num = (inv.number || '').toLowerCase();
+        const rec = (inv.recipient || inv.delivery?.recipient || '').toLowerCase();
+        const city = (inv.city || inv.delivery?.city || '').toLowerCase();
+        const addr = (inv.address || inv.delivery?.address || '').toLowerCase();
+        const doc = (inv.recipientDocument || '').toLowerCase();
+        if (!num.includes(search) && !rec.includes(search) && !city.includes(search) && !addr.includes(search) && !doc.includes(search)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  function renderWizNfsTable() {
+    const tbody = document.getElementById('wiz-nfs-table-body');
+    if (!tbody) return;
+
+    const available = getWizAvailableInvoices();
+    const selectedIds = STATE.wiz.selectedNfIds || new Set();
+
+    // Atualizar Contadores e Totais da Etapa 1
     let totalVol = 0;
     let totalWeight = 0;
     let totalVal = 0;
+
+    (STATE.invoices || []).forEach(inv => {
+      if (selectedIds.has(inv.id)) {
+        totalVol += inv.volumeCount || inv.volumes || 1;
+        totalWeight += inv.weight || inv.weightKg || 0;
+        totalVal += inv.value || inv.totalValue || 0;
+      }
+    });
+
+    const setVal = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = txt;
+    };
+
+    setVal('wiz-nfs-summary-count', selectedIds.size + ' NFs');
+    setVal('wiz-nfs-summary-vol', totalVol + ' vol');
+    setVal('wiz-nfs-summary-wt', totalWeight.toFixed(1) + ' kg');
+    setVal('wiz-nfs-summary-val', formatCurrency(totalVal));
+    setVal('wiz-tab1-count', selectedIds.size);
+
+    // Master checkbox
+    const masterCb = document.getElementById('wiz-nfs-master-checkbox');
+    if (masterCb) {
+      masterCb.checked = available.length > 0 && available.every(i => selectedIds.has(i.id));
+    }
+
+    if (available.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-xs" style="padding: 2rem; color: var(--text-muted);">Nenhuma Nota Fiscal disponível encontrada com os filtros atuais.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = available.map(inv => {
+      const isChecked = selectedIds.has(inv.id);
+      const recipient = inv.recipient || inv.delivery?.recipient || 'Cliente';
+      const doc = inv.recipientDocument || '-';
+      const addr = (inv.address || inv.delivery?.address || '-') + (inv.numberAddress ? ', ' + inv.numberAddress : '');
+      const cityUf = (inv.city || inv.delivery?.city || 'São Paulo') + '/' + (inv.state || inv.delivery?.state || 'SP');
+      const val = formatCurrency(inv.value || inv.totalValue || 0);
+      const vol = inv.volumeCount || inv.volumes || 1;
+      const wt = inv.weight || inv.weightKg || 0;
+      const srcBadge = (inv.source === 'MANUAL')
+        ? '<span class="badge badge-amber font-mono" style="font-size:0.65rem;">MANUAL</span>'
+        : '<span class="badge badge-brand font-mono" style="font-size:0.65rem;">ERP</span>';
+
+      return '<tr style="cursor:pointer;' + (isChecked ? 'background:rgba(37,99,235,0.06);' : '') + '" onclick="toggleWizNfRow(event, \\'' + inv.id + '\\')">' +
+        '<td style="text-align:center;" onclick="event.stopPropagation();">' +
+          '<input type="checkbox" onchange="toggleWizNfSelection(\\'' + inv.id + '\\', this.checked)" ' + (isChecked ? 'checked' : '') + ' style="cursor:pointer; width:16px; height:16px;">' +
+        '</td>' +
+        '<td>' +
+          '<div class="font-mono font-bold" style="color:var(--text-primary);">NF nº ' + (inv.number || '-') + '</div>' +
+          '<div class="text-xs text-muted">Série ' + (inv.series || '1') + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="font-semibold text-xs truncate" style="max-width:160px;" title="' + recipient + '">' + recipient + '</div>' +
+          '<div class="font-mono text-xs text-muted">' + doc + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="text-xs truncate" style="max-width:180px;" title="' + addr + '">' + addr + '</div>' +
+        '</td>' +
+        '<td><strong class="text-xs" style="color:var(--brand-light);">' + cityUf + '</strong></td>' +
+        '<td><span class="font-mono text-xs">' + vol + ' vol &bull; ' + wt + ' kg</span></td>' +
+        '<td><strong class="font-mono text-xs" style="color:var(--emerald-base);">' + val + '</strong></td>' +
+        '<td>' + srcBadge + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function toggleWizNfRow(event, id) {
+    // Alterna a seleção ao clicar na linha
+    const isChecked = STATE.wiz.selectedNfIds.has(id);
+    toggleWizNfSelection(id, !isChecked);
+  }
+
+  function toggleWizNfSelection(id, checked) {
+    if (checked) {
+      STATE.wiz.selectedNfIds.add(id);
+      STATE.selectedInvoiceIds.add(id);
+    } else {
+      STATE.wiz.selectedNfIds.delete(id);
+      STATE.selectedInvoiceIds.delete(id);
+    }
+    updateSelectedInvoicesCounter();
+    renderWizNfsTable();
+  }
+
+  function wizSelectAllAvailableNfs() {
+    const available = getWizAvailableInvoices();
+    available.forEach(i => {
+      STATE.wiz.selectedNfIds.add(i.id);
+      STATE.selectedInvoiceIds.add(i.id);
+    });
+    updateSelectedInvoicesCounter();
+    renderWizNfsTable();
+  }
+
+  function wizDeselectAllNfs() {
+    STATE.wiz.selectedNfIds.clear();
+    STATE.selectedInvoiceIds.clear();
+    updateSelectedInvoicesCounter();
+    renderWizNfsTable();
+  }
+
+  function handleWizMasterCheckboxChange(masterCb) {
+    if (masterCb.checked) {
+      wizSelectAllAvailableNfs();
+    } else {
+      wizDeselectAllNfs();
+    }
+  }
+
+  // ==============================================
+  // ETAPA 2: AGRUPAMENTO & REORDENAÇÃO DE PARADAS
+  // ==============================================
+  function buildWizStopsFromSelectedNfs() {
+    const selectedIds = Array.from(STATE.wiz.selectedNfIds || []);
+    const selectedInvoices = (STATE.invoices || []).filter(i => selectedIds.includes(i.id));
+
+    const stopMap = new Map();
 
     selectedInvoices.forEach(inv => {
       const recipient = (inv.recipient || 'Cliente').trim();
@@ -2716,18 +2938,18 @@ export const ADMIN_JS_TEMPLATE = `
       const wt = inv.weight || inv.weightKg || 0;
       const val = inv.value || inv.totalValue || 0;
 
-      totalVol += vol;
-      totalWeight += wt;
-      totalVal += val;
-
       if (!stopMap.has(key)) {
         stopMap.set(key, {
+          key,
           recipient,
           recipientDocument: inv.recipientDocument,
           address: addr || 'Endereço de Entrega',
           numberAddress: inv.numberAddress,
+          complement: inv.complement,
+          neighborhood: inv.neighborhood,
           city,
           state: inv.state || 'SP',
+          postalCode: inv.postalCode,
           totalVol: 0,
           totalWeight: 0,
           totalVal: 0,
@@ -2742,64 +2964,248 @@ export const ADMIN_JS_TEMPLATE = `
       grp.invoices.push(inv);
     });
 
-    const stops = Array.from(stopMap.values());
+    const newStops = Array.from(stopMap.values());
 
-    // Atualizar Indicadores do Modal
-    const setModalVal = (id, text) => {
-      const el = document.getElementById(id);
-      if (el) el.innerText = text;
-    };
-    setModalVal('nf-modal-count', selectedInvoices.length + ' NFs');
-    setModalVal('nf-modal-stops-count', stops.length + ' parada(s)');
-    setModalVal('nf-modal-total-weight-vol', totalVol + ' vol | ' + totalWeight.toFixed(1) + ' kg');
-    setModalVal('nf-modal-total-value', formatCurrency(totalVal));
-
-    // Renderizar tabela de paradas
-    const stopsTbody = document.getElementById('nf-modal-grouped-stops-table');
-    if (stopsTbody) {
-      stopsTbody.innerHTML = stops.map((stop, idx) => {
-        const nfBadges = stop.invoices.map(i => '<span class="badge badge-purple font-mono" style="font-size:0.65rem;">NF ' + i.number + '</span>').join(' ');
-        const fullAddr = [stop.address, stop.numberAddress ? 'nº ' + stop.numberAddress : '', stop.city + '/' + stop.state].filter(Boolean).join(', ');
-        return '<tr>' +
-          '<td class="font-bold text-center" style="color:var(--brand-light);">' + (idx + 1) + 'º</td>' +
-          '<td><strong>' + stop.recipient + '</strong><br><span class="text-xs font-mono text-muted">' + (stop.recipientDocument || '') + '</span></td>' +
-          '<td class="text-xs">' + fullAddr + '</td>' +
-          '<td><strong class="font-mono text-xs" style="color:var(--emerald-base);">' + formatCurrency(stop.totalVal) + '</strong><br><span class="text-xs font-mono text-muted">' + stop.totalVol + ' vol &bull; ' + stop.totalWeight + ' kg</span></td>' +
-          '<td><div class="flex items-center gap-1" style="flex-wrap:wrap;">' + nfBadges + '</div></td>' +
-        '</tr>';
-      }).join('');
+    // Se já havia paradas reordenadas, tentar manter a ordem prévia
+    if (STATE.wiz.stops && STATE.wiz.stops.length > 0) {
+      const existingKeys = new Set(newStops.map(s => s.key));
+      const preserved = STATE.wiz.stops.filter(s => existingKeys.has(s.key)).map(s => stopMap.get(s.key));
+      const added = newStops.filter(s => !STATE.wiz.stops.some(old => old.key === s.key));
+      STATE.wiz.stops = [...preserved, ...added];
+    } else {
+      STATE.wiz.stops = newStops;
     }
-
-    renderIcons();
-    openModal('modal-create-trip-from-invoices');
   }
 
-  async function submitTripFromInvoices(action = 'DRAFT') {
-    const selectedIds = Array.from(STATE.selectedInvoiceIds);
-    if (selectedIds.length === 0) {
-      showToast('Selecione pelo menos uma Nota Fiscal.', 'error');
+  function moveWizStopUp(idx) {
+    if (idx <= 0 || !STATE.wiz.stops || idx >= STATE.wiz.stops.length) return;
+    const temp = STATE.wiz.stops[idx - 1];
+    STATE.wiz.stops[idx - 1] = STATE.wiz.stops[idx];
+    STATE.wiz.stops[idx] = temp;
+    renderWizStopsTable();
+  }
+
+  function moveWizStopDown(idx) {
+    if (!STATE.wiz.stops || idx < 0 || idx >= STATE.wiz.stops.length - 1) return;
+    const temp = STATE.wiz.stops[idx + 1];
+    STATE.wiz.stops[idx + 1] = STATE.wiz.stops[idx];
+    STATE.wiz.stops[idx] = temp;
+    renderWizStopsTable();
+  }
+
+  function renderWizStopsTable() {
+    const tbody = document.getElementById('wiz-stops-table-body');
+    if (!tbody) return;
+
+    const stops = STATE.wiz.stops || [];
+    const totalNfs = (STATE.wiz.selectedNfIds || new Set()).size;
+
+    let totalVol = 0;
+    let totalWt = 0;
+    let totalVal = 0;
+
+    stops.forEach(s => {
+      totalVol += s.totalVol;
+      totalWt += s.totalWeight;
+      totalVal += s.totalVal;
+    });
+
+    const setVal = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = txt;
+    };
+
+    setVal('wiz-stops-summary-badge', stops.length + ' paradas agrupadas a partir de ' + totalNfs + ' NFs');
+    setVal('wiz-stops-total-vol-wt', totalVol + ' vol | ' + totalWt.toFixed(1) + ' kg');
+    setVal('wiz-stops-total-val', formatCurrency(totalVal));
+    setVal('wiz-tab2-count', stops.length);
+
+    if (stops.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-xs" style="padding: 2rem; color: var(--text-muted);">Nenhuma parada configurada. Volte à Etapa 1 para selecionar NFs.</td></tr>';
       return;
     }
 
-    const tripCode = document.getElementById('nf-modal-trip-code')?.value.trim();
-    const startDate = document.getElementById('nf-modal-start-date')?.value;
-    const driverId = document.getElementById('nf-modal-driver-select')?.value || undefined;
-    const vehicleId = document.getElementById('nf-modal-vehicle-select')?.value || undefined;
-    const origin = document.getElementById('nf-modal-origin')?.value.trim();
-    const notes = document.getElementById('nf-modal-notes')?.value.trim();
+    tbody.innerHTML = stops.map((stop, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === stops.length - 1;
+      const nfBadges = stop.invoices.map(i => '<span class="badge badge-purple font-mono" style="font-size:0.65rem;">NF ' + i.number + '</span>').join(' ');
+      const fullAddr = [stop.address, stop.numberAddress ? 'nº ' + stop.numberAddress : '', stop.neighborhood].filter(Boolean).join(', ');
+      const cityUf = stop.city + '/' + stop.state;
+
+      const upBtn = '<button type="button" onclick="moveWizStopUp(' + idx + ')" ' + (isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : '') + ' class="btn btn-secondary btn-xs btn-icon" title="Subir parada na rota"><span data-lucide="chevron-up" class="icon-xs"></span></button>';
+      const downBtn = '<button type="button" onclick="moveWizStopDown(' + idx + ')" ' + (isLast ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : '') + ' class="btn btn-secondary btn-xs btn-icon" title="Descer parada na rota"><span data-lucide="chevron-down" class="icon-xs"></span></button>';
+
+      return '<tr>' +
+        '<td style="text-align:center;">' +
+          '<div class="flex items-center justify-center gap-1">' +
+            '<span class="font-bold text-xs font-mono" style="color:var(--brand-light); width:22px;">#' + (idx + 1) + '</span>' +
+            '<div class="flex flex-col gap-0.5">' + upBtn + downBtn + '</div>' +
+          '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="font-bold text-xs">' + stop.recipient + '</div>' +
+          '<div class="font-mono text-xs text-muted">' + (stop.recipientDocument || '-') + '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="text-xs truncate" style="max-width:200px;" title="' + fullAddr + '">' + fullAddr + '</div>' +
+        '</td>' +
+        '<td><strong class="text-xs" style="color:var(--brand-light);">' + cityUf + '</strong></td>' +
+        '<td>' +
+          '<div class="font-mono text-xs font-bold" style="color:var(--emerald-base);">' + formatCurrency(stop.totalVal) + '</div>' +
+          '<div class="font-mono text-xs text-muted">' + stop.totalVol + ' vol &bull; ' + stop.totalWeight.toFixed(1) + ' kg</div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="flex items-center gap-1" style="flex-wrap:wrap;">' + nfBadges + '</div>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    renderIcons();
+  }
+
+  // ==============================================
+  // ETAPA 3: MOTORISTA & VEÍCULO
+  // ==============================================
+  function populateWizDriversAndVehicles() {
+    const driverSelect = document.getElementById('wiz-driver-select');
+    if (driverSelect) {
+      const activeDrivers = (STATE.wiz.driversList || []).filter(d => d.status === 'ATIVO' || d.status === 'DISPONIVEL' || !d.status);
+      driverSelect.innerHTML = '<option value="">Selecione o motorista (ou deixe vazio para rascunho)...</option>' +
+        activeDrivers.map(d => {
+          const name = d.user?.name || ('Motorista ' + (d.cnh || d.id.slice(0, 6)));
+          const cnh = d.cnh ? ' - CNH: ' + d.cnh : '';
+          return '<option value="' + d.id + '">' + name + cnh + '</option>';
+        }).join('');
+    }
+
+    const vehicleSelect = document.getElementById('wiz-vehicle-select');
+    if (vehicleSelect) {
+      const activeVehicles = (STATE.wiz.vehiclesList || []).filter(v => v.status !== 'INATIVO' && v.status !== 'MANUTENCAO');
+      vehicleSelect.innerHTML = '<option value="">Selecione o veículo...</option>' +
+        activeVehicles.map(v => {
+          return '<option value="' + v.id + '">' + v.plate + ' - ' + v.model + ' (' + v.type + ')</option>';
+        }).join('');
+    }
+  }
+
+  function handleWizDriverChange() {
+    const driverId = document.getElementById('wiz-driver-select')?.value;
+    const warningBanner = document.getElementById('wiz-driver-warning-banner');
+    const warningText = document.getElementById('wiz-driver-warning-text');
+    const infoBox = document.getElementById('wiz-driver-info-box');
+
+    if (!driverId) {
+      if (warningBanner) warningBanner.classList.add('hidden');
+      if (infoBox) infoBox.classList.add('hidden');
+      return;
+    }
+
+    const driver = (STATE.wiz.driversList || []).find(d => d.id === driverId);
+    if (!driver) return;
+
+    // Exibir Caixa de Dados do Motorista
+    if (infoBox) {
+      infoBox.classList.remove('hidden');
+      document.getElementById('wiz-driver-info-name').innerText = driver.user?.name || 'Motorista';
+      document.getElementById('wiz-driver-info-cpf').innerText = driver.user?.cpf || '-';
+      document.getElementById('wiz-driver-info-phone').innerText = driver.user?.phone || '-';
+      document.getElementById('wiz-driver-info-cnh').innerText = (driver.cnh || '-') + (driver.cnhCategory ? ' (' + driver.cnhCategory + ')' : '');
+    }
+
+    // Auto-selecionar veículo vinculado ao motorista
+    if (driver.vehicleId || driver.vehicle?.id) {
+      const targetVehicleId = driver.vehicleId || driver.vehicle?.id;
+      const vehicleSelect = document.getElementById('wiz-vehicle-select');
+      if (vehicleSelect) vehicleSelect.value = targetVehicleId;
+    }
+
+    // Verificar se o motorista já tem viagem ativa em andamento
+    const hasActiveTrip = (STATE.trips || []).some(t => t.driverId === driverId && (t.status === 'IN_PROGRESS' || t.status === 'ASSIGNED'));
+    if (hasActiveTrip && warningBanner && warningText) {
+      warningBanner.classList.remove('hidden');
+      warningText.innerText = 'Atenção: Este motorista já possui uma viagem ativa (Em Trânsito ou Despachada). Ao despachar outra, ele terá múltiplas rotas ativas no app.';
+    } else if (warningBanner) {
+      warningBanner.classList.add('hidden');
+    }
+  }
+
+  function handleWizVehicleChange() {
+    // Pode verificar restrição de veículo se necessário
+  }
+
+  // ==============================================
+  // ETAPA 4: RESUMO & DESPACHO FINAL
+  // ==============================================
+  function updateWizFinalSummary() {
+    const driverId = document.getElementById('wiz-driver-select')?.value;
+    const vehicleId = document.getElementById('wiz-vehicle-select')?.value;
+
+    const driver = (STATE.wiz.driversList || []).find(d => d.id === driverId);
+    const vehicle = (STATE.wiz.vehiclesList || []).find(v => v.id === vehicleId);
+
+    const driverName = driver ? (driver.user?.name || 'Motorista') : 'Não atribuído (Rascunho)';
+    const vehiclePlate = vehicle ? (vehicle.plate + ' - ' + vehicle.model) : 'Não atribuído';
+
+    const stops = STATE.wiz.stops || [];
+    const totalNfs = (STATE.wiz.selectedNfIds || new Set()).size;
+
+    const lastStop = stops[stops.length - 1];
+    const destination = lastStop ? (lastStop.recipient + ' (' + lastStop.city + '/' + lastStop.state + ')') : 'Destino da Rota';
+
+    const setVal = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = txt;
+    };
+
+    setVal('wiz-final-driver', driverName);
+    setVal('wiz-final-vehicle', vehiclePlate);
+    setVal('wiz-final-stops-nfs', stops.length + ' Paradas &bull; ' + totalNfs + ' NFs');
+    setVal('wiz-final-destination', destination);
+  }
+
+  async function submitWizTrip(action = 'ASSIGN') {
+    const selectedIds = Array.from(STATE.wiz.selectedNfIds || []);
+    if (selectedIds.length === 0) {
+      showToast('Selecione pelo menos uma Nota Fiscal para criar a rota.', 'error');
+      switchWizStep(1);
+      return;
+    }
+
+    const tripCode = document.getElementById('wiz-trip-code')?.value.trim();
+    const startDate = document.getElementById('wiz-start-date')?.value;
+    const driverId = document.getElementById('wiz-driver-select')?.value || undefined;
+    const vehicleId = document.getElementById('wiz-vehicle-select')?.value || undefined;
+    const origin = document.getElementById('wiz-origin')?.value.trim();
+    const notes = document.getElementById('wiz-notes')?.value.trim();
 
     if (!tripCode) {
-      showToast('Por favor, informe o código da viagem/rota.', 'error');
+      showToast('Por favor, preencha o código da viagem/rota na Etapa 4.', 'error');
+      switchWizStep(4);
       return;
     }
 
     if (action === 'ASSIGN' && !driverId) {
-      showToast('Para despachar imediatamente a rota, selecione o motorista responsável.', 'error');
+      showToast('Para despachar a rota imediatamente para o motorista, selecione o motorista na Etapa 3.', 'warning');
+      switchWizStep(3);
       return;
     }
 
     try {
-      showToast('Criando rota operacional a partir das Notas Fiscais...', 'info');
+      showToast(action === 'ASSIGN' ? 'Despachando rota para o motorista no HK Connect...' : 'Salvando rascunho de rota...', 'info');
+
+      const stopsPayload = (STATE.wiz.stops || []).map((s, idx) => ({
+        sequence: idx + 1,
+        recipient: s.recipient,
+        recipientDocument: s.recipientDocument,
+        address: s.address,
+        numberAddress: s.numberAddress,
+        complement: s.complement,
+        neighborhood: s.neighborhood,
+        city: s.city,
+        state: s.state,
+        postalCode: s.postalCode,
+        invoiceIds: s.invoices.map(i => i.id)
+      }));
 
       const payload = {
         invoiceIds: selectedIds,
@@ -2809,7 +3215,8 @@ export const ADMIN_JS_TEMPLATE = `
         vehicleId: vehicleId || undefined,
         origin: origin || undefined,
         notes: notes || undefined,
-        action: action
+        action: action,
+        stops: stopsPayload
       };
 
       const result = await apiFetch('/api/v1/admin/invoices/create-trip', {
@@ -2817,21 +3224,30 @@ export const ADMIN_JS_TEMPLATE = `
         body: JSON.stringify(payload)
       });
 
+      const driverObj = (STATE.wiz.driversList || []).find(d => d.id === driverId);
+      const driverLabel = driverObj?.user?.name || 'motorista';
+
       showToast(
         action === 'ASSIGN'
-          ? 'Rota ' + result.tripCode + ' criada e despachada para o motorista com sucesso!'
+          ? 'Rota ' + result.tripCode + ' criada e despachada para ' + driverLabel + ' com sucesso! Rota sincronizada com o app Android.'
           : 'Rota ' + result.tripCode + ' salva como rascunho com sucesso!',
         'success'
       );
 
-      // Limpar seleção
+      // Limpar seleções
+      STATE.wiz.selectedNfIds.clear();
       STATE.selectedInvoiceIds.clear();
-      closeModal('modal-create-trip-from-invoices');
+      updateSelectedInvoicesCounter();
 
-      // Navegar para a visualização de viagens
-      navigate('trips');
+      closeModal('modal-dispatch-route-wizard');
+
+      // Navegar para a tela de viagens e abrir detalhes da viagem recém-criada
+      await navigate('trips');
+      if (result.id) {
+        openTripDetailsModal(result.id);
+      }
     } catch (err) {
-      showToast('Erro ao criar rota a partir das NFs: ' + err.message, 'error');
+      showToast('Erro ao despachar rota: ' + err.message, 'error');
     }
   }
 
