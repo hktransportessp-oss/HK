@@ -54,8 +54,7 @@ export class RomaneiosController {
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: RomaneioStatus,
-    @GetUser('driverId') driverId: string,
   ) {
-    return this.romaneiosService.updateStatus(id, status, driverId);
+    return this.romaneiosService.updateStatus(id, status);
   }
 }

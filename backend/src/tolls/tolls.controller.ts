@@ -54,8 +54,7 @@ export class TollsController {
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: TollStatus,
-    @GetUser('driverId') driverId: string,
   ) {
-    return this.tollsService.updateStatus(id, status, driverId);
+    return this.tollsService.updateStatus(id, status);
   }
 }

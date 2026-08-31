@@ -60,7 +60,7 @@ fun InvoiceDto.toEntity(): InvoiceEntity {
     return InvoiceEntity(
         id = id,
         number = "Nº $number",
-        tripId = tripId,
+        tripId = tripId ?: "",
         deliveryId = deliveryId ?: "",
         accessKey = accessKey,
         recipient = recipient,

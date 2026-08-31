@@ -46,7 +46,7 @@ export class AuthController {
     return this.authService.logout(userId);
   }
 
-  @Get('me')
+  @Get(['me', 'users/me'])
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Retorna os dados do usuário autenticado na sessão' })

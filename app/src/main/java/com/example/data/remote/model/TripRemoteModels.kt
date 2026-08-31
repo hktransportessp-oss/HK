@@ -54,8 +54,8 @@ data class DeliveryDto(
 @JsonClass(generateAdapter = true)
 data class InvoiceDto(
     @Json(name = "id") val id: String,
-    @Json(name = "tripId") val tripId: String,
-    @Json(name = "deliveryId") val deliveryId: String?,
+    @Json(name = "tripId") val tripId: String? = null,
+    @Json(name = "deliveryId") val deliveryId: String? = null,
     @Json(name = "number") val number: String,
     @Json(name = "accessKey") val accessKey: String,
     @Json(name = "recipient") val recipient: String,

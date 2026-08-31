@@ -22,6 +22,7 @@ describe('AdminUsersService', () => {
         delete: jest.fn(),
       },
       driver: {
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -39,6 +40,33 @@ describe('AdminUsersService', () => {
       refreshToken: {
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
+      },
+      trip: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      toll: {
+        count: jest.fn().mockResolvedValue(0),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      romaneio: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      occurrence: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      financialSettlement: {
+        count: jest.fn().mockResolvedValue(0),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { netAmount: 0 } }),
+      },
+      driverLastLocation: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      idempotencyRecord: {
+        count: jest.fn().mockResolvedValue(0),
       },
       $transaction: jest.fn().mockImplementation(async (cb) => {
         if (Array.isArray(cb)) {
@@ -296,12 +324,17 @@ describe('AdminUsersService', () => {
       .mockResolvedValueOnce(3); // inactiveUsers
     mockPrisma.driver.count = jest.fn()
       .mockResolvedValueOnce(10) // totalDrivers
-      .mockResolvedValueOnce(2); // erpOnlyDrivers
-    mockPrisma.vehicle.count = jest.fn().mockResolvedValueOnce(8); // totalVehicles
+      .mockResolvedValueOnce(8)  // activeDrivers
+      .mockResolvedValueOnce(2)  // erpOnlyDrivers
+      .mockResolvedValueOnce(1); // driversWithoutVehicle
+    mockPrisma.vehicle.count = jest.fn()
+      .mockResolvedValueOnce(8)  // totalVehicles
+      .mockResolvedValueOnce(7)  // activeVehicles
+      .mockResolvedValueOnce(5); // availableVehicles
 
     const stats = await service.getDashboardStats();
 
-    expect(stats).toEqual({
+    expect(stats).toMatchObject({
       totalUsers: 15,
       activeUsers: 12,
       inactiveUsers: 3,

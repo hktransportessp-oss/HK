@@ -3,6 +3,7 @@ package com.example.data.remote
 import com.example.data.remote.model.AuthResponse
 import com.example.data.remote.model.LoginRequest
 import com.example.data.remote.model.RefreshTokenRequest
+import com.example.data.remote.model.UserProfileResponse
 import com.example.data.remote.model.UserDto
 import retrofit2.Call
 import retrofit2.Response
@@ -25,5 +26,5 @@ interface AuthApiService {
     suspend fun logout(): Response<Unit>
 
     @GET("api/v1/users/me")
-    suspend fun getProfile(): Response<AuthResponse>
+    suspend fun getProfile(): Response<UserProfileResponse>
 }

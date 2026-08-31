@@ -200,7 +200,7 @@ export class InvoicesService {
       throw new NotFoundException('NF-e não encontrada no sistema.');
     }
 
-    if (invoice.trip.driverId !== driverId) {
+    if (invoice.trip && invoice.trip.driverId && driverId && invoice.trip.driverId !== driverId) {
       throw new ForbiddenException(
         'Acesso negado: Você não possui autorização para visualizar esta NF-e.',
       );

@@ -55,6 +55,13 @@ data class AuthResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class UserProfileResponse(
+    @Json(name = "user") val user: UserDto,
+    @Json(name = "driver") val driver: DriverDto? = null,
+    @Json(name = "vehicle") val vehicle: VehicleDto? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class ApiErrorResponse(
     @Json(name = "status") val statusCode: Int? = null,
     @Json(name = "message") val message: String? = null,
