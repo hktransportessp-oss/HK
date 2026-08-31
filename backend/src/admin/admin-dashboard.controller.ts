@@ -244,6 +244,43 @@ export class AdminDashboardController {
     });
   }
 
+  @Post('invoices/manual')
+  @ApiOperation({ summary: 'Cadastrar Nota Fiscal manual (Contingência Operacional HK)' })
+  async createManualInvoice(
+    @Body() dto: {
+      number: string;
+      series?: string;
+      accessKey?: string;
+      recipient: string;
+      recipientDocument?: string;
+      address: string;
+      numberAddress?: string;
+      complement?: string;
+      neighborhood?: string;
+      city: string;
+      state?: string;
+      postalCode?: string;
+      volumeCount?: number;
+      weight?: number;
+      value?: number;
+      observations?: string;
+      customerId?: string;
+      customerName?: string;
+    },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.createManualInvoice(dto, actor);
+  }
+
+  @Post('invoices')
+  @ApiOperation({ summary: 'Cadastrar Nota Fiscal (Alias)' })
+  async createInvoiceAlias(
+    @Body() dto: any,
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.createManualInvoice(dto, actor);
+  }
+
   @Post('invoices/create-trip')
   @ApiOperation({ summary: 'Criar nova viagem/rota a partir de Notas Fiscais selecionadas no ERP/HK' })
   async createTripFromInvoices(
@@ -261,6 +298,25 @@ export class AdminDashboardController {
     @GetUser() actor: { id: string },
   ) {
     return this.adminUsersService.createTripFromInvoices(dto, actor);
+  }
+
+  @Post('trips/:id/invoices')
+  @ApiOperation({ summary: 'Adicionar Notas Fiscais a uma rota/viagem existente' })
+  async addInvoicesToExistingTrip(
+    @Param('id') id: string,
+    @Body() dto: { invoiceIds: string[] },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.addInvoicesToTrip(id, dto.invoiceIds, actor);
+  }
+
+  @Post('invoices/add-to-trip')
+  @ApiOperation({ summary: 'Adicionar Notas Fiscais a uma rota/viagem existente (Alias)' })
+  async addInvoicesToTripAlias(
+    @Body() dto: { tripId: string; invoiceIds: string[] },
+    @GetUser() actor: { id: string },
+  ) {
+    return this.adminUsersService.addInvoicesToTrip(dto.tripId, dto.invoiceIds, actor);
   }
 
   @Post('invoices/sync-erp')

@@ -987,14 +987,19 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
               <span class="badge badge-purple" style="font-size: 0.7rem;">FONTE DA VERDADE: ERP</span>
             </div>
             <p class="text-xs" style="color: var(--text-secondary); margin-top: 0.2rem;">
-              Selecione as Notas Fiscais sincronizadas do ERP para agrupar por destinatário e montar rotas operacionais de entrega.
+              Selecione as Notas Fiscais sincronizadas do ERP ou cadastradas manualmente para agrupar por destinatário e montar rotas operacionais de entrega.
             </p>
           </div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2" style="flex-wrap: wrap;">
             <button onclick="handleSyncErpInvoices()" id="btn-sync-erp-nfs" class="btn btn-secondary" title="Sincronizar NFs recebidas no ERP">
               <span data-lucide="refresh-cw" class="icon-xs"></span>
               <span>Sincronizar ERP</span>
+            </button>
+
+            <button onclick="openCreateManualInvoiceModal()" id="btn-create-manual-nf" class="btn btn-secondary" style="border-color: var(--emerald-base); color: var(--emerald-base);" title="Cadastrar NF manualmente em contingência">
+              <span data-lucide="plus-circle" class="icon-xs"></span>
+              <span>Nova Nota Fiscal</span>
             </button>
 
             <button onclick="openCreateTripFromSelectedInvoicesModal()" id="btn-create-trip-from-nfs" class="btn btn-primary" style="padding: 0.75rem 1.4rem; font-size: 0.9rem; font-weight: 700; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);" disabled>
@@ -1062,8 +1067,14 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
                 <option value="CANCELLED">Canceladas no ERP</option>
               </select>
 
-              <select id="invoice-fiscal-filter" class="input-control" style="width: auto; min-width: 150px;" onchange="renderInvoicesTable()">
-                <option value="">Status Fiscal: Todos</option>
+              <select id="invoice-source-filter" class="input-control" style="width: auto; min-width: 140px;" onchange="renderInvoicesTable()">
+                <option value="">Origem: Todas</option>
+                <option value="ERP">ERP Integrado</option>
+                <option value="MANUAL">MANUAL (Contingência)</option>
+              </select>
+
+              <select id="invoice-fiscal-filter" class="input-control" style="width: auto; min-width: 140px;" onchange="renderInvoicesTable()">
+                <option value="">Fiscal: Todos</option>
                 <option value="ACTIVE">Ativas</option>
                 <option value="CANCELLED">Canceladas</option>
               </select>
@@ -2894,6 +2905,241 @@ export const ADMIN_HTML_TEMPLATE = `<!DOCTYPE html>
             <span>Criar e Despachar Rota</span>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRAR NOTA FISCAL MANUAL (CONTINGÊNCIA) -->
+  <div id="modal-create-manual-invoice" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 820px; max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div class="flex items-center gap-3">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--emerald-base), #059669); display: flex; align-items: center; justify-content: center; color: #fff;">
+            <span data-lucide="receipt" class="icon-md"></span>
+          </div>
+          <div>
+            <h3 class="text-base font-bold">Cadastrar Nota Fiscal (Contingência / Manual)</h3>
+            <p class="text-xs" style="color: var(--text-secondary);">Cadastre uma NF avulsa para incluir imediatamente em viagens e rotas operacionais.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-create-manual-invoice')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <form id="form-create-manual-invoice" onsubmit="submitManualInvoice(event)" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+          
+          <!-- Dados Fiscais -->
+          <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--emerald-base); margin-bottom: 0.75rem;">
+              <span data-lucide="file-check" class="icon-sm"></span>
+              <span>Identificação Fiscal do Documento</span>
+            </h4>
+
+            <div class="grid-3" style="margin-bottom: 0.75rem;">
+              <div>
+                <label>Número da NF-e *</label>
+                <input type="text" id="manual-nf-number" class="input-control font-mono font-bold" required placeholder="Ex: 004821">
+              </div>
+              <div>
+                <label>Série</label>
+                <input type="text" id="manual-nf-series" class="input-control font-mono" value="1" placeholder="1">
+              </div>
+              <div>
+                <label>Remetente / Embarcador</label>
+                <input type="text" id="manual-nf-customer" class="input-control" placeholder="HK Distribuidora Ltda" value="HK Logística & Cargas">
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between" style="margin-bottom: 0.25rem;">
+                <label style="margin-bottom: 0;">Chave de Acesso (44 dígitos - Opcional)</label>
+                <button type="button" onclick="generateRandomManualNfKey()" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                  <span data-lucide="sparkles" class="icon-xs"></span>
+                  <span>Gerar Chave Automática</span>
+                </button>
+              </div>
+              <input type="text" id="manual-nf-key" class="input-control font-mono text-xs" placeholder="Deixe em branco para gerar chave válida de contingência automaticamente" maxlength="44">
+            </div>
+          </div>
+
+          <!-- Destinatário -->
+          <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--brand-light); margin-bottom: 0.75rem;">
+              <span data-lucide="user" class="icon-sm"></span>
+              <span>Destinatário & Documentos</span>
+            </h4>
+
+            <div class="grid-2">
+              <div>
+                <label>Razão Social / Nome do Destinatário *</label>
+                <input type="text" id="manual-nf-recipient" class="input-control" required placeholder="Ex: Supermercados Estrela Ltda">
+              </div>
+              <div>
+                <label>CNPJ / CPF do Destinatário</label>
+                <input type="text" id="manual-nf-doc" class="input-control font-mono" placeholder="Ex: 12.345.678/0001-90">
+              </div>
+            </div>
+          </div>
+
+          <!-- Endereço de Entrega -->
+          <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--cyan-base); margin-bottom: 0.75rem;">
+              <span data-lucide="map-pin" class="icon-sm"></span>
+              <span>Endereço de Entrega / Descarregamento</span>
+            </h4>
+
+            <div class="grid-3" style="margin-bottom: 0.75rem;">
+              <div style="grid-column: span 2;">
+                <label>Logradouro / Rua / Avenida *</label>
+                <input type="text" id="manual-nf-address" class="input-control" required placeholder="Ex: Rua das Indústrias">
+              </div>
+              <div>
+                <label>Número *</label>
+                <input type="text" id="manual-nf-number-address" class="input-control" required placeholder="Ex: 500" value="S/N">
+              </div>
+            </div>
+
+            <div class="grid-4">
+              <div>
+                <label>Complemento</label>
+                <input type="text" id="manual-nf-complement" class="input-control" placeholder="Ex: Galpão 2">
+              </div>
+              <div>
+                <label>Bairro *</label>
+                <input type="text" id="manual-nf-neighborhood" class="input-control" required placeholder="Ex: Industrial" value="Centro">
+              </div>
+              <div>
+                <label>Cidade *</label>
+                <input type="text" id="manual-nf-city" class="input-control" required placeholder="Ex: São Paulo">
+              </div>
+              <div>
+                <label>UF *</label>
+                <input type="text" id="manual-nf-state" class="input-control font-mono uppercase" required placeholder="SP" maxlength="2" value="SP">
+              </div>
+            </div>
+
+            <div style="margin-top: 0.75rem;">
+              <label>CEP</label>
+              <input type="text" id="manual-nf-cep" class="input-control font-mono" placeholder="01001-000" maxlength="9" style="max-width: 200px;">
+            </div>
+          </div>
+
+          <!-- Carga e Valores -->
+          <div class="card" style="padding: 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);">
+            <h4 class="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style="color: var(--amber-base); margin-bottom: 0.75rem;">
+              <span data-lucide="package" class="icon-sm"></span>
+              <span>Volumes, Peso e Valor</span>
+            </h4>
+
+            <div class="grid-3">
+              <div>
+                <label>Quantidade de Volumes *</label>
+                <input type="number" id="manual-nf-volumes" class="input-control font-mono" required min="1" value="1">
+              </div>
+              <div>
+                <label>Peso Total (kg) *</label>
+                <input type="number" id="manual-nf-weight" class="input-control font-mono" required min="0.1" step="0.1" value="10.0">
+              </div>
+              <div>
+                <label>Valor da Mercadoria (R$) *</label>
+                <input type="number" id="manual-nf-value" class="input-control font-mono" required min="0.01" step="0.01" value="500.00">
+              </div>
+            </div>
+
+            <div style="margin-top: 0.75rem;">
+              <label>Observações / Instruções Operacionais</label>
+              <textarea id="manual-nf-notes" class="input-control" rows="2" placeholder="Ex: Recebimento das 08h às 17h. Conferir canhoto assinado."></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between;">
+          <button type="button" onclick="closeModal('modal-create-manual-invoice')" class="btn btn-secondary">Cancelar</button>
+          
+          <button type="submit" id="btn-submit-manual-nf" class="btn btn-primary" style="background: var(--emerald-base); border-color: var(--emerald-base);">
+            <span data-lucide="check" class="icon-xs"></span>
+            <span>Salvar Nota Fiscal</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR NOTAS FISCAIS À ROTA EXISTENTE -->
+  <div id="modal-add-invoices-to-trip" class="modal-overlay hidden">
+    <div class="card modal-content" style="max-width: 860px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div class="flex items-center gap-3">
+          <div style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: linear-gradient(135deg, var(--brand-light), var(--brand-primary)); display: flex; align-items: center; justify-content: center; color: #fff;">
+            <span data-lucide="plus-circle" class="icon-md"></span>
+          </div>
+          <div>
+            <h3 class="text-base font-bold">Adicionar Notas Fiscais à Viagem <span id="add-nf-trip-code" class="text-primary font-mono font-bold"></span></h3>
+            <p class="text-xs" style="color: var(--text-secondary);">Selecione Notas Fiscais disponíveis para incluir como novas paradas de entrega nesta rota.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-add-invoices-to-trip')" class="btn btn-secondary btn-icon" title="Fechar">
+          <span data-lucide="x" class="icon-sm"></span>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1; padding: 1.5rem;">
+        <input type="hidden" id="add-nf-target-trip-id">
+
+        <!-- Trip Status Warning / Info -->
+        <div class="card" style="padding: 0.85rem 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <div><strong>Motorista:</strong> <span id="add-nf-trip-driver" style="color: #fff;">-</span></div>
+          <div><strong>Veículo:</strong> <span id="add-nf-trip-vehicle" style="color: #fff;">-</span></div>
+          <div><strong>Status:</strong> <span id="add-nf-trip-status" class="badge badge-brand">-</span></div>
+        </div>
+
+        <!-- Available Invoices Table -->
+        <div>
+          <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+            <h4 class="text-xs font-bold uppercase tracking-wider" style="color: var(--text-muted);">Notas Fiscais Disponíveis (Sem Viagem)</h4>
+            <span id="add-nf-available-count" class="badge badge-emerald text-xs">0 NFs disponíveis</span>
+          </div>
+
+          <div class="table-container" style="max-height: 280px; background: var(--bg-surface-elevated); border-radius: 0.75rem; border: 1px solid var(--border-color);">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">
+                    <input type="checkbox" id="add-nf-select-all-cb" onchange="toggleSelectAllAddToTripInvoices(this.checked)">
+                  </th>
+                  <th>NF / Série</th>
+                  <th>Destinatário</th>
+                  <th>Endereço / Cidade</th>
+                  <th>Volumes / Peso</th>
+                  <th>Valor</th>
+                </tr>
+              </thead>
+              <tbody id="add-nf-available-table-body">
+                <tr><td colspan="6" class="text-center text-xs" style="padding: 1.5rem; color: var(--text-muted);">Carregando Notas Fiscais disponíveis...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Selected Summary -->
+        <div class="card" style="padding: 0.85rem 1rem; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.3); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <span class="text-xs font-bold" style="color: var(--brand-light);">
+            Selecionadas para adicionar: <strong id="add-nf-selected-count">0</strong> NFs
+          </span>
+          <span class="text-xs" id="add-nf-selected-summary" style="color: var(--text-secondary);">-</span>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; align-items: center; justify-content: space-between;">
+        <button type="button" onclick="closeModal('modal-add-invoices-to-trip')" class="btn btn-secondary">Cancelar</button>
+        
+        <button type="button" id="btn-confirm-add-invoices-to-trip" onclick="submitAddInvoicesToTrip()" class="btn btn-primary" disabled>
+          <span data-lucide="plus" class="icon-xs"></span>
+          <span>Adicionar NFs à Viagem</span>
+        </button>
       </div>
     </div>
   </div>
