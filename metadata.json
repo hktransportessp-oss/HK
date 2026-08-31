@@ -1,6 +1,6 @@
 {
   "name": "HK Connect",
   "description": "App de gestão logística e controle financeiro de transporte para motoristas da HK Transportes",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
