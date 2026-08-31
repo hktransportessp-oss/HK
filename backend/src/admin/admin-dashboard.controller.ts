@@ -20,7 +20,7 @@ export class AdminDashboardController {
   async getBuildInfo() {
     return {
       app: 'HK Connect',
-      adminBuild: 'HK-ADMIN-ROUTE-WIZARD-01',
+      adminBuild: 'HK-ADMIN-ROUTE-WIZARD-02',
       buildTimestamp: new Date().toISOString(),
       railwayCommitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
       nodeEnv: process.env.NODE_ENV || 'development',

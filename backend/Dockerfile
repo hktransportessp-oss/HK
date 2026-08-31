@@ -23,6 +23,10 @@ RUN npx prisma generate
 
 # Copy application source code and configurations
 COPY tsconfig*.json nest-cli.json ./
+
+ARG HK_ADMIN_BUILD=HK-ADMIN-ROUTE-WIZARD-02
+RUN echo "Building HK Connect Admin: ${HK_ADMIN_BUILD}"
+
 COPY src ./src/
 
 # Compile NestJS application to /app/dist
