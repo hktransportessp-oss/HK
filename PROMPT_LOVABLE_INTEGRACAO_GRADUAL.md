@@ -1,0 +1,191 @@
+# Prompt para o Lovable — Integração gradual HK Fleet Forge
+
+Você é o agente responsável por evoluir a aplicação web logística HK Fleet Forge sem quebrar o fluxo atual dos motoristas.
+
+## Objetivo
+
+Adicionar a integração operacional:
+
+**Gmail → API/backend → Supabase → CT-e/MDF-e → AverbePorto → telas existentes**
+
+A aplicação já possui login, navegação, telas operacionais e banco Supabase. Preserve tudo que já funciona. Esta tarefa não é uma reescrita da aplicação.
+
+## Arquitetura obrigatória
+
+Use o seguinte modelo:
+
+- **Lovable Web App:** interface, autenticação, navegação e exibição de estados.
+- **API versionada:** regras de negócio, ingestão Gmail, parsing de NF-e, validações e integração AverbePorto.
+- **Supabase:** fonte única de verdade e persistência.
+- **Flags de ativação:** liberação gradual e reversível do novo fluxo.
+
+Não criar um banco paralelo, uma autenticação paralela ou uma segunda navegação para o motorista.
+
+## Regras de compatibilidade
+
+1. Não remover nem substituir o login atual.
+2. Não alterar a navegação principal sem necessidade comprovada.
+3. Não alterar telas existentes de motorista sem preservar seus contratos e estados atuais.
+4. Não colocar credenciais Gmail, tokens, chaves privadas ou segredos no frontend.
+5. O frontend nunca deve chamar o Gmail ou o AverbePorto diretamente.
+6. Toda operação que altera dados deve passar pela API/backend, ser validada e gerar registro de auditoria.
+7. Reutilizar as tabelas existentes do Supabase; antes de criar qualquer tabela, verificar o schema atual.
+8. Se uma alteração puder quebrar uma regra existente, não aplicá-la silenciosamente: registrar a incompatibilidade e propor a menor mudança possível.
+9. Toda alteração deve ser compatível com desktop e uso móvel pelo motorista.
+10. Manter contratos antigos funcionando quando uma API nova for criada.
+
+## API versionada
+
+Criar ou evoluir endpoints sob `/api/v1`.
+
+Endpoints previstos:
+
+- `GET /api/v1/health`
+- `GET /api/v1/feature-flags`
+- `GET /api/v1/operacoes/resumo`
+- `GET /api/v1/romaneios/:id`
+- `POST /api/v1/gmail/processar-email`
+- `GET /api/v1/gmail/processamentos/:id`
+- `POST /api/v1/averbacoes`
+- `GET /api/v1/averbacoes/:id`
+
+O endpoint Gmail já validado no ambiente Lovable é a referência de integração existente. Preserve seu contrato e não exponha o token no navegador.
+
+## Fluxo de processamento
+
+Implementar nesta ordem:
+
+1. Ler mensagens do remetente configurado, inicialmente `relatorio@quataalimentos.com.br`.
+2. Identificar mensagens e anexos candidatos a NF-e.
+3. Baixar e validar o XML no backend.
+4. Extrair, no mínimo:
+   - chave de acesso;
+   - número e série;
+   - emitente e destinatário;
+   - valor total;
+   - data de emissão;
+   - itens quando necessário;
+   - identificadores do e-mail e anexo.
+5. Salvar o recebimento de forma idempotente: o mesmo e-mail/anexo/NF-e não pode gerar duplicidade.
+6. Relacionar a NF-e com a operação correta:
+   - motorista;
+   - veículo;
+   - romaneio;
+   - CT-e;
+   - MDF-e;
+   - apólice.
+7. Se houver ambiguidade, colocar o item em `pendente_validacao`; não escolher silenciosamente.
+8. Permitir que o motorista apenas visualize/confirme o que estiver liberado para ele.
+9. Gerar ou vincular CT-e e MDF-e conforme as regras existentes.
+10. Enviar a operação ao AverbePorto somente quando todas as validações obrigatórias estiverem concluídas.
+11. Gravar o status, protocolo, resposta sanitizada, data, tentativa e erro técnico quando houver.
+
+## Estados mínimos
+
+Use estados claros e persistidos, sem apagar histórico:
+
+- `recebido`
+- `xml_validado`
+- `pendente_vinculacao`
+- `vinculado`
+- `aguardando_cte_mdfe`
+- `pronto_para_averbacao`
+- `enviando`
+- `averbado`
+- `erro_retentavel`
+- `erro_permanente`
+- `cancelado`
+
+## Flags de ativação
+
+Adicionar configuração segura para ativação gradual, por exemplo:
+
+- `gmail_ingestion_enabled`
+- `nfe_xml_parsing_enabled`
+- `averbacao_dry_run`
+- `averbacao_enabled`
+- `averbacao_allowed_driver_ids`
+- `averbacao_allowed_romaneio_ids`
+
+Comportamento obrigatório:
+
+- flags desligadas: o fluxo atual permanece inalterado;
+- somente ingestão ligada: ler e salvar, sem averbar;
+- parsing ligado: validar XML e mostrar pendências, sem envio externo;
+- `dry_run` ligado: montar e registrar o payload, sem enviar ao AverbePorto;
+- envio ligado: permitir AverbePorto somente após validação;
+- qualquer erro deve permitir desligar a flag e retornar ao comportamento anterior.
+
+## Fases de entrega
+
+### Fase 1 — API sem impacto visual
+
+- Criar endpoints versionados.
+- Criar validações e logs.
+- Usar dados reais do Supabase.
+- Manter todas as flags de escrita/envio desligadas.
+- Não alterar a navegação do motorista.
+
+### Fase 2 — Teste Gmail e NF-e
+
+- Processar mensagens históricas e novas em modo seguro.
+- Validar anexos XML.
+- Garantir idempotência.
+- Registrar NF-e e pendências no Supabase.
+- Não enviar nada ao AverbePorto.
+
+### Fase 3 — Ativação limitada
+
+- Liberar para uma pequena lista de romaneios ou motoristas usando allowlist.
+- Manter `averbacao_dry_run` ativo inicialmente.
+- Exibir apenas status e pendências nas telas existentes.
+
+### Fase 4 — Validação da averbação
+
+- Comparar payload com o contrato oficial do AverbePorto.
+- Fazer envio controlado.
+- Armazenar protocolo e resposta sanitizada.
+- Implementar retry somente para erros retentáveis.
+- Nunca duplicar uma averbação já confirmada.
+
+### Fase 5 — Liberação operacional
+
+- Ampliar a allowlist gradualmente.
+- Monitorar erros, duplicidades e pendências.
+- Somente depois remover o modo restrito.
+- Manter rollback por flags.
+
+## Critérios de aceite
+
+Antes de considerar a tarefa concluída, comprovar:
+
+- login e navegação atuais continuam funcionando;
+- nenhuma credencial aparece no bundle frontend;
+- API responde com erros estruturados e códigos HTTP adequados;
+- reprocessar o mesmo e-mail não duplica a NF-e;
+- XML inválido fica pendente ou com erro claro;
+- NF-e ambígua não é vinculada automaticamente;
+- motorista só acessa dados autorizados para seu usuário;
+- AverbePorto não é chamado quando a flag está desligada;
+- `dry_run` não envia dados externos;
+- há registro de auditoria para cada etapa;
+- é possível desligar as flags e voltar ao comportamento anterior;
+- build, testes e validação do schema Supabase passam antes do deploy.
+
+## Forma de execução
+
+Trabalhe em pequenas alterações verificáveis. Antes de editar:
+
+1. inspecione o código e o schema existentes;
+2. identifique os contratos atuais;
+3. apresente os arquivos e tabelas que serão afetados;
+4. não altere arquivos não relacionados.
+
+Depois de cada etapa:
+
+1. execute build e testes;
+2. valide os endpoints;
+3. verifique erros de TypeScript;
+4. informe o que foi alterado e o que ainda está desligado por flag.
+
+Se faltar alguma informação do contrato do AverbePorto ou do schema Supabase, pare o envio externo em `dry_run` e peça a informação necessária. Não invente payloads, tabelas ou regras de negócio.
