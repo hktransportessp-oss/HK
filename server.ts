@@ -8,6 +8,76 @@ async function startServer() {
 
   app.use(express.json());
 
+  const averbePortoUrl =
+    process.env.AVERBEPORTO_API_URL ?? "https://apis.averbeporto.com.br/php/conn.php";
+  const averbePortoCompany = process.env.AVERBEPORTO_COMPANY ?? "5";
+
+  function isInternalRequest(req: express.Request) {
+    const configuredKey = process.env.HK_INTERNAL_API_KEY;
+    return Boolean(configuredKey && req.header("x-internal-api-key") === configuredKey);
+  }
+
+  // Tests the official AverbePorto API login without exposing credentials or session cookies.
+  app.post("/api/v1/averbeporto/test-connection", async (req, res) => {
+    if (!isInternalRequest(req)) {
+      return res.status(401).json({ success: false, error: "Não autorizado." });
+    }
+
+    const user = process.env.AVERBEPORTO_API_USER;
+    const pass = process.env.AVERBEPORTO_API_PASSWORD;
+    if (!user || !pass) {
+      return res.status(503).json({
+        success: false,
+        error: "Credenciais da API AverbePorto não configuradas no backend.",
+      });
+    }
+
+    try {
+      const body = new URLSearchParams({
+        mod: "login",
+        comp: averbePortoCompany,
+        user,
+        pass,
+      });
+      const response = await fetch(averbePortoUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "user-agent": "Mozilla/5.0 HK-Fleet-Forge/1.0",
+        },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const payload = (await response.json()) as {
+        success?: number;
+        logout?: number;
+        error?: { code?: string; msg?: string };
+      };
+
+      if (!response.ok || payload.logout || payload.success !== 1) {
+        return res.status(502).json({
+          success: false,
+          connected: false,
+          error: payload.error?.msg ?? "Falha na autenticação AverbePorto.",
+          providerStatus: response.status,
+        });
+      }
+
+      const sessionCookie = response.headers.get("set-cookie")?.includes("portal[ses]");
+      return res.json({
+        success: true,
+        connected: sessionCookie,
+        providerStatus: response.status,
+        message: sessionCookie
+          ? "Autenticação AverbePorto realizada com sucesso."
+          : "A API respondeu, mas não retornou a sessão esperada.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro de comunicação.";
+      return res.status(502).json({ success: false, connected: false, error: message });
+    }
+  });
+
   // API health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", app: "HK Connect", time: new Date().toISOString() });
