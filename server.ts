@@ -23,8 +23,10 @@ async function startServer() {
       return res.status(401).json({ success: false, error: "Não autorizado." });
     }
 
-    const user = process.env.AVERBEPORTO_API_USER;
-    const pass = process.env.AVERBEPORTO_API_PASSWORD;
+    const user =
+      process.env.AVERBE_PORTO_API_USUARIO ?? process.env.AVERBEPORTO_API_USER;
+    const pass =
+      process.env.AVERBE_PORTO_API_SENHA ?? process.env.AVERBEPORTO_API_PASSWORD;
     if (!user || !pass) {
       return res.status(503).json({
         success: false,
