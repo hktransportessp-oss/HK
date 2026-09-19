@@ -64,3 +64,14 @@ O motorista é vinculado à operação; a HK Transportes é a empresa emitente d
 - Usar Secrets do backend ou mecanismo seguro equivalente.
 - Não fazer emissão fiscal real sem confirmação explícita e sem ambiente de produção validado.
 - Manter idempotência por e-mail, anexo, NF-e e referência de emissão.
+
+## Interface de liberação implementada
+
+O app já possui uma primeira camada visual para o fluxo de liberação:
+
+- `CARGA_LIBERADA` exibe confirmação no painel e nos detalhes da viagem.
+- `AGUARDANDO_LIBERACAO` exibe espera e bloqueia o início da viagem pendente.
+- `LIBERACAO_PENDENTE` e `ERRO_LIBERACAO` possuem mensagens próprias na tela de detalhes.
+- A mudança para `CARGA_LIBERADA` gera uma notificação no contexto do app.
+
+Essa camada ainda usa dados locais de demonstração. O backend/Lovable deve substituir os dados locais pelos estados persistidos no Supabase e pela resposta validada da Focus NFe/SEFAZ/AverbePorto.

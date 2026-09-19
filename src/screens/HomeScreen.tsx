@@ -90,6 +90,36 @@ export const HomeScreen: React.FC = () => {
         </div>
       )}
 
+      {activeTrip && activeTrip.clearanceStatus !== 'CARGA_LIBERADA' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+          <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-amber-900">Aguardando Liberação</h3>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              A viagem só poderá ser iniciada após a confirmação da operação.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {activeTrip && activeTrip.clearanceStatus === 'CARGA_LIBERADA' && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+          <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-emerald-900">Carga Liberada</h3>
+            <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+              {activeTrip.status === 'PENDENTE'
+                ? 'A operação foi confirmada. Você pode iniciar sua viagem.'
+                : 'A operação está confirmada. Você pode seguir viagem e realizar as entregas.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Active Trip Spotlight Card */}
       {activeTrip && (
         <div className="bg-[#0F2042] text-white rounded-2xl p-5 shadow-lg border border-blue-950/60 relative overflow-hidden">

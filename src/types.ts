@@ -31,6 +31,12 @@ export type TripStatus =
   | 'AGUARDANDO_CARREGAMENTO'
   | 'EM_TRANSITO';
 
+export type ClearanceStatus =
+  | 'AGUARDANDO_LIBERACAO'
+  | 'CARGA_LIBERADA'
+  | 'LIBERACAO_PENDENTE'
+  | 'ERRO_LIBERACAO';
+
 export interface Trip {
   id: string;
   tripCode: string;
@@ -49,6 +55,9 @@ export interface Trip {
   linkedInvoicesCount: number;
   notes?: string;
   currentStopIndex?: number;
+  clearanceStatus: ClearanceStatus;
+  clearanceProtocol?: string;
+  clearanceUpdatedAt?: string;
 }
 
 export interface Delivery {

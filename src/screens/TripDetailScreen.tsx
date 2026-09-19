@@ -47,12 +47,43 @@ export const TripDetailScreen: React.FC = () => {
   }
 
   const handleNextTripStatus = () => {
+    if (trip.clearanceStatus !== 'CARGA_LIBERADA') {
+      return;
+    }
+
     if (trip.status === 'PENDENTE') {
       updateTripStatus(trip.id, 'EM ANDAMENTO');
     } else if (trip.status === 'EM ANDAMENTO') {
       updateTripStatus(trip.id, 'CONCLUÍDA');
     }
   };
+
+  const clearanceCopy = {
+    CARGA_LIBERADA: {
+      title: 'Carga Liberada',
+      message: 'A operação foi confirmada. Você pode seguir viagem.',
+      classes: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+      icon: <CheckCircle className="w-5 h-5 text-emerald-600" />
+    },
+    AGUARDANDO_LIBERACAO: {
+      title: 'Aguardando Liberação',
+      message: 'Aguarde a confirmação da operação antes de iniciar a viagem.',
+      classes: 'bg-amber-50 border-amber-200 text-amber-900',
+      icon: <Clock className="w-5 h-5 text-amber-600" />
+    },
+    LIBERACAO_PENDENTE: {
+      title: 'Liberação Pendente',
+      message: 'A operação precisa ser analisada pela central HK.',
+      classes: 'bg-rose-50 border-rose-200 text-rose-900',
+      icon: <AlertCircle className="w-5 h-5 text-rose-600" />
+    },
+    ERRO_LIBERACAO: {
+      title: 'Erro na Liberação',
+      message: 'Não foi possível confirmar a operação. Aguarde a central HK.',
+      classes: 'bg-rose-50 border-rose-200 text-rose-900',
+      icon: <AlertCircle className="w-5 h-5 text-rose-600" />
+    }
+  }[trip.clearanceStatus];
 
   const handleConfirmDelivery = (deliveryId: string) => {
     updateDeliveryStatus(
@@ -125,14 +156,36 @@ export const TripDetailScreen: React.FC = () => {
           {trip.status !== 'CONCLUÍDA' ? (
             <button
               onClick={handleNextTripStatus}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5"
+              disabled={trip.status === 'PENDENTE' && trip.clearanceStatus !== 'CARGA_LIBERADA'}
+              className={`px-4 py-2 font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 ${
+                trip.status === 'PENDENTE' && trip.clearanceStatus !== 'CARGA_LIBERADA'
+                  ? 'bg-slate-400 text-slate-100 cursor-not-allowed'
+                  : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white'
+              }`}
             >
-              {trip.status === 'PENDENTE' ? 'INICIAR VIAGEM' : 'FINALIZAR VIAGEM'}
+              {trip.status === 'PENDENTE'
+                ? trip.clearanceStatus === 'CARGA_LIBERADA'
+                  ? 'INICIAR VIAGEM'
+                  : 'AGUARDANDO LIBERAÇÃO'
+                : 'FINALIZAR VIAGEM'}
             </button>
           ) : (
             <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
               <CheckCircle className="w-4 h-4" /> Viagem Finalizada
             </span>
+          )}
+        </div>
+      </div>
+
+      <div className={`rounded-2xl border p-4 flex items-start gap-3 ${clearanceCopy.classes}`}>
+        <div className="mt-0.5 shrink-0">{clearanceCopy.icon}</div>
+        <div>
+          <h3 className="text-sm font-extrabold">{clearanceCopy.title}</h3>
+          <p className="text-xs mt-1 leading-relaxed">{clearanceCopy.message}</p>
+          {trip.clearanceProtocol && (
+            <p className="text-[10px] mt-2 font-semibold opacity-75">
+              Protocolo: {trip.clearanceProtocol}
+            </p>
           )}
         </div>
       </div>

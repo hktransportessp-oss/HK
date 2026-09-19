@@ -39,6 +39,9 @@ export const initialTrips: Trip[] = [
     totalWeightKg: 14200,
     operationName: 'Distribuição Sul - Carga Fracionada',
     linkedInvoicesCount: 6,
+    clearanceStatus: 'CARGA_LIBERADA',
+    clearanceProtocol: 'DEMO-ROM-4992',
+    clearanceUpdatedAt: '24/10/2023 05:45',
     notes: 'Priorizar descarregamento na Distribuidora Paranaense antes das 17h.',
     currentStopIndex: 1
   },
@@ -58,6 +61,9 @@ export const initialTrips: Trip[] = [
     totalWeightKg: 18500,
     operationName: 'Linha Sudeste Indústria',
     linkedInvoicesCount: 5,
+    clearanceStatus: 'CARGA_LIBERADA',
+    clearanceProtocol: 'DEMO-ROM-4985',
+    clearanceUpdatedAt: '20/10/2023 06:50',
     notes: 'Viagem finalizada sem ocorrências.'
   },
   {
@@ -75,7 +81,10 @@ export const initialTrips: Trip[] = [
     stopsCount: 2,
     totalWeightKg: 22000,
     operationName: 'Transferência Portuária Terminal 2',
-    linkedInvoicesCount: 2
+    linkedInvoicesCount: 2,
+    clearanceStatus: 'CARGA_LIBERADA',
+    clearanceProtocol: 'DEMO-ROM-4978',
+    clearanceUpdatedAt: '18/10/2023 13:20',
   },
   {
     id: 'TRIP-5001',
@@ -93,6 +102,7 @@ export const initialTrips: Trip[] = [
     totalWeightKg: 16000,
     operationName: 'Expresso Catarinense HK',
     linkedInvoicesCount: 8,
+    clearanceStatus: 'AGUARDANDO_LIBERACAO',
     notes: 'Aguardando liberação de ordem de carregamento no CD Cajamar.'
   }
 ];

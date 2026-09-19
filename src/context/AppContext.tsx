@@ -51,6 +51,7 @@ interface AppContextType {
   logout: () => void;
   selectTrip: (id: string) => void;
   updateTripStatus: (tripId: string, newStatus: string) => void;
+  updateTripClearanceStatus: (tripId: string, status: Trip['clearanceStatus'], protocol?: string) => void;
   updateDeliveryStatus: (deliveryId: string, newStatus: Delivery['status'], signedProofUrl?: string) => void;
   submitRomaneio: (notes: string, files: string[]) => Promise<Romaneio>;
   submitToll: (value: number, notes: string, plaza?: string) => Promise<TollReceipt>;
@@ -137,6 +138,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTrips(prev =>
       prev.map(t => (t.id === tripId ? { ...t, status: newStatus } : t))
     );
+  };
+
+  const updateTripClearanceStatus = (
+    tripId: string,
+    status: Trip['clearanceStatus'],
+    protocol?: string
+  ) => {
+    setTrips(prev =>
+      prev.map(t =>
+        t.id === tripId
+          ? {
+              ...t,
+              clearanceStatus: status,
+              clearanceProtocol: protocol || t.clearanceProtocol,
+              clearanceUpdatedAt: new Date().toLocaleString('pt-BR')
+            }
+          : t
+      )
+    );
+
+    if (status === 'CARGA_LIBERADA') {
+      setNotifications(prev => [
+        {
+          id: `clearance_${tripId}_${Date.now()}`,
+          title: 'Carga Liberada',
+          message: `A viagem ${tripId} foi liberada. Você pode seguir viagem para realizar as entregas.`,
+          timeLabel: 'Agora',
+          type: 'APROVADO',
+          valueText: 'Viagem',
+          valueLabel: tripId,
+          read: false
+        },
+        ...prev
+      ]);
+    }
   };
 
   const updateDeliveryStatus = (
@@ -292,6 +328,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         logout,
         selectTrip,
         updateTripStatus,
+        updateTripClearanceStatus,
         updateDeliveryStatus,
         submitRomaneio,
         submitToll,

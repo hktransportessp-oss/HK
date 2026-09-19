@@ -101,6 +101,17 @@ Regras obrigatórias:
 9. Não chamar produção, SEFAZ com validade fiscal ou AverbePorto enquanto a homologação não estiver aprovada.
 10. Salvar apenas status e respostas sanitizadas no Supabase; nunca tokens, certificado ou senhas em tabela comum.
 
+INTERFACE DE LIBERACAO DO MOTORISTA
+
+A primeira camada visual já foi implementada no app e deve ser conectada aos estados reais do backend:
+
+- CARGA_LIBERADA: mostrar confirmação no painel e nos detalhes; permitir iniciar a viagem pendente.
+- AGUARDANDO_LIBERACAO: mostrar espera e manter o início bloqueado.
+- LIBERACAO_PENDENTE ou ERRO_LIBERACAO: mostrar pendência/erro e manter o início bloqueado.
+- Ao mudar para CARGA_LIBERADA, criar uma notificação para o motorista.
+
+Não tratar os dados locais de demonstração como autorização fiscal. Substituí-los pelos estados persistidos no Supabase somente depois de validar CT-e, MDF-e e a resposta oficial da operação.
+
 FLUXO DE PROCESSAMENTO
 
 Implementar nesta ordem:
