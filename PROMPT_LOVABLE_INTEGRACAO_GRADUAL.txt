@@ -76,6 +76,31 @@ O endpoint deve:
 
 Se for necessário persistir configuração no Supabase, salvar apenas status, ambiente, data do último teste e mensagem sanitizada. Segredos persistidos devem usar Supabase Vault ou Secrets do backend, nunca uma tabela pública comum.
 
+INTEGRACAO FISCAL FOCUS NFE — PRIMEIRO EM HOMOLOGACAO
+
+Usar a Focus NFe como provedor inicial para emissão de CT-e e MDF-e. O plano inicial é o Solo, sujeito aos limites e preços vigentes. Não contratar ou enviar dados cadastrais sem autorização explícita do proprietário.
+
+Após a contratação do teste, configurar como Secrets do backend, nunca no frontend:
+
+- FOCUSNFE_TOKEN_HOMOLOGACAO
+- FOCUSNFE_TOKEN_PRODUCAO somente quando autorizado
+- certificado A1/PFX ou P12 e sua senha somente no mecanismo seguro aceito pelo provedor
+
+Usar primeiro https://homologacao.focusnfe.com.br/v2. Produção, somente após aprovação formal, usa https://api.focusnfe.com.br/v2.
+
+Regras obrigatórias:
+
+1. Usar HTTP Basic com o token como usuário e senha vazia.
+2. Cadastrar a HK com CNPJ, inscrição estadual, regime tributário, certificado digital, séries e habilitações de CT-e/MDF-e.
+3. Ler a NF-e do Gmail e baixar o XML completo antes de montar documento fiscal.
+4. Relacionar NF-e, motorista logado, CPF, veículo, placa e romaneio no Supabase.
+5. Montar payloads de CT-e e MDF-e em dry_run antes do envio.
+6. Garantir referência idempotente para evitar duplicidade.
+7. Enviar somente para homologação no primeiro teste.
+8. Consultar o processamento ou usar webhook para registrar autorização/rejeição.
+9. Não chamar produção, SEFAZ com validade fiscal ou AverbePorto enquanto a homologação não estiver aprovada.
+10. Salvar apenas status e respostas sanitizadas no Supabase; nunca tokens, certificado ou senhas em tabela comum.
+
 FLUXO DE PROCESSAMENTO
 
 Implementar nesta ordem:

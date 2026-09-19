@@ -1,62 +1,66 @@
-# Ponto de retomada - fluxo de averbação HK
+# Ponto de retomada — emissão fiscal e averbação HK
 
 ## Data
-2026-09-18
+2026-09-19
 
-## Contexto
-- O projeto já está com uso da Gmail API para leitura de e-mails.
-- O Supabase já possui tabelas criadas.
-- O fluxo real do negócio é:
-  1. receber NF-e por e-mail do remetente fixo;
-  2. ler chave/protocolo/emitente/valor;
-  3. salvar a NF-e;
-  4. o motorista recebe o romaneio do gerente;
-  5. o motorista acessa o portal;
-  6. confirma as NF-es e documentos da operação;
-  7. a HK emite o CT-e;
-  8. a HK emite o MDF-e;
-  9. envia a operação ao AverbePorto;
-  10. grava protocolo e pendência.
+## Estado validado
 
-## Regras do negócio
-- Remetente principal das NF-e: relatorio@quataalimentos.com.br.
-- A leitura deve ser feita por remetente fixo e por conteúdo da mensagem.
-- Não é “nota isolada”; é operação documental completa.
-- O vínculo deve existir entre:
-  - motorista
-  - veículo
-  - romaneio
-  - NF-e
-  - CT-e
-  - MDF-e
-  - apólice
+- Repositório: `hktransportessp-oss/HK`, branch `main`.
+- Último commit publicado: `e124d07`.
+- Aplicação: Lovable Web App conectado ao GitHub e Supabase.
+- Nenhuma credencial é registrada neste arquivo.
 
-## Próximo passo de execução
-1. Revisar as tabelas existentes no Supabase.
-2. Mapear colunas e campos relevantes para:
-   - email_recebido
-   - nf_e
-   - motorista
-   - veiculo
-   - romaneio
-   - cte
-   - mdfe
-   - apolice
-   - averbacao_envio
-   - averbacao_protocolo
-3. Validar como os XMLs entram e como são salvos.
-4. Definir a pipeline de parsing do e-mail para dados estruturados.
-5. Definir a vinculação de NF-e ao romaneio e ao motorista.
-6. Definir a criação do CT-e e MDF-e após a operação.
-7. Definir a integração com o AverbePorto.
+### Gmail
 
-## Arquivos de referência
-- SQL de averbação enviado anteriormente.
-- Repositório local de apoio: HK_repo_observe.
+- Endpoint de leitura já validado com HTTP 200.
+- Foram encontradas mensagens reais do fluxo de NF-e.
+- A listagem retorna anexos XML e `attachmentId`.
+- O conteúdo completo do XML ainda precisa ser baixado por uma rota segura para permitir o parsing.
+- Remetente de referência: `relatorio@quataalimentos.com.br`.
 
-## Observação importante
-- Nenhuma alteração funcional foi aplicada até este ponto.
-- Este arquivo serve como ponto de salvamento e retomada.
+### AverbePorto
 
-## Próximo retorno
-- Após confirmar esse ponto, seguimos para revisão das tabelas do Supabase e a definição do fluxo de ingestão do Gmail.
+- Comunicação de login validada em produção com HTTP 200 e `connected: true`.
+- Endpoint de teste: `POST /api/public/v1/averbeporto/test-connection`.
+- Secrets do backend:
+  - `AVERBE_PORTO_API_USUARIO`
+  - `AVERBE_PORTO_API_SENHA`
+- Não enviar XML de averbação até CT-e e MDF-e estarem autorizados.
+
+### Focus NFe
+
+- Provedor escolhido para a primeira integração fiscal: Focus NFe.
+- Plano inicial pretendido: Solo, R$ 89,90/mês, com 100 documentos e cobrança adicional publicada de R$ 0,10 por documento excedente.
+- O plano informa emissão de CT-e e MDF-e, entre outros documentos.
+- O cadastro oferece 30 dias de teste e integração exclusivamente por API.
+- Usar inicialmente o ambiente de homologação, sem validade fiscal:
+  - `https://homologacao.focusnfe.com.br/v2`
+- Produção somente após validação e autorização formal:
+  - `https://api.focusnfe.com.br/v2`
+- Autenticação Focus NFe: HTTP Basic, token como usuário e senha vazia.
+- Requisitos a preparar: CNPJ, inscrição estadual, regime tributário, certificado A1 PFX/P12, senha do certificado, séries, veículos, motoristas e municípios.
+
+## Fluxo-alvo
+
+`Gmail → XML NF-e → Supabase → motorista/veículo/romaneio → Focus NFe (CT-e) → Focus NFe (MDF-e) → SEFAZ → AverbePorto`
+
+O motorista é vinculado à operação; a HK Transportes é a empresa emitente do CT-e/MDF-e, conforme cadastro fiscal e autorização aplicável.
+
+## Próximos passos seguros
+
+1. Criar conta de teste Focus NFe selecionando **Integração com a API**.
+2. Obter o token de homologação e cadastrá-lo somente como Secret do backend Lovable.
+3. Configurar a empresa HK e certificado conforme exigências da Focus NFe.
+4. Criar rota segura para baixar o anexo Gmail pelo `attachmentId`.
+5. Fazer parsing do XML e validar chave, emitente, destinatário, valor, data e itens.
+6. Montar CT-e e MDF-e em modo de simulação/dry-run.
+7. Enviar somente documentos de teste para homologação.
+8. Consultar autorização ou receber webhook e salvar resposta sanitizada.
+9. Não usar produção nem chamar AverbePorto com documentos não autorizados.
+
+## Regras de segurança
+
+- Nunca colocar tokens, certificado, senha ou chave no frontend, Git, logs ou tabela comum do Supabase.
+- Usar Secrets do backend ou mecanismo seguro equivalente.
+- Não fazer emissão fiscal real sem confirmação explícita e sem ambiente de produção validado.
+- Manter idempotência por e-mail, anexo, NF-e e referência de emissão.
