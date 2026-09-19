@@ -65,6 +65,12 @@ export const TripDetailScreen: React.FC = () => {
       classes: 'bg-emerald-50 border-emerald-200 text-emerald-900',
       icon: <CheckCircle className="w-5 h-5 text-emerald-600" />
     },
+    LIBERACAO_MANUAL: {
+      title: 'Carga Liberada Manualmente',
+      message: 'A operação foi liberada pela central HK. Siga as orientações da operação.',
+      classes: 'bg-blue-50 border-blue-200 text-blue-900',
+      icon: <ShieldCheck className="w-5 h-5 text-blue-600" />
+    },
     AGUARDANDO_LIBERACAO: {
       title: 'Aguardando Liberação',
       message: 'Aguarde a confirmação da operação antes de iniciar a viagem.',

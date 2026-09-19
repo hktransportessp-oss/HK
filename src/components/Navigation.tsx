@@ -11,11 +11,14 @@ import {
   ArrowLeft,
   ScanLine,
   Layers,
-  MapPin
+  MapPin,
+  ShieldCheck
 } from 'lucide-react';
 
 export const TopBar: React.FC = () => {
   const { currentScreen, goBack, unreadNotificationsCount, navigateTo, userProfile } = useApp();
+  const normalizedRole = userProfile?.role.toUpperCase() || '';
+  const canAccessAdmin = normalizedRole.includes('ADMIN') || normalizedRole.includes('OPER');
 
   const isSubScreen = [
     'TRIP_DETAIL',
@@ -23,7 +26,8 @@ export const TopBar: React.FC = () => {
     'LINKED_INVOICES',
     'SCAN_INVOICE',
     'ROMANEIO_STATUS',
-    'NOTIFICATIONS'
+    'NOTIFICATIONS',
+    'ADMIN_PENDING_TRIPS'
   ].includes(currentScreen);
 
   const getScreenTitle = () => {
@@ -52,6 +56,8 @@ export const TopBar: React.FC = () => {
         return 'Notificações';
       case 'PROFILE':
         return 'Meu Perfil';
+      case 'ADMIN_PENDING_TRIPS':
+        return 'Viagens Pendentes';
       default:
         return 'HK Connect';
     }
@@ -122,6 +128,15 @@ export const TopBar: React.FC = () => {
           >
             {userProfile?.name ? userProfile.name.charAt(0) : 'J'}
           </button>
+          {canAccessAdmin && (
+            <button
+              onClick={() => navigateTo('ADMIN_PENDING_TRIPS')}
+              className="p-2 rounded-full hover:bg-white/10 text-orange-300 hover:text-white transition-colors"
+              title="Painel administrativo"
+            >
+              <ShieldCheck className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
     </header>
@@ -129,7 +144,9 @@ export const TopBar: React.FC = () => {
 };
 
 export const BottomNavigation: React.FC = () => {
-  const { currentScreen, navigateTo } = useApp();
+  const { currentScreen, navigateTo, userProfile } = useApp();
+  const normalizedRole = userProfile?.role.toUpperCase() || '';
+  const canAccessAdmin = normalizedRole.includes('ADMIN') || normalizedRole.includes('OPER');
 
   const navItems = [
     {
@@ -185,6 +202,17 @@ export const BottomNavigation: React.FC = () => {
             </button>
           );
         })}
+        {canAccessAdmin && (
+          <button
+            onClick={() => navigateTo('ADMIN_PENDING_TRIPS')}
+            className={`flex-1 py-1 flex flex-col items-center justify-center transition-colors relative ${
+              currentScreen === 'ADMIN_PENDING_TRIPS' ? 'text-[#0F2042] font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShieldCheck className="w-5 h-5 mb-1" />
+            <span className="text-[11px] tracking-tight">Admin</span>
+          </button>
+        )}
       </div>
     </nav>
   );

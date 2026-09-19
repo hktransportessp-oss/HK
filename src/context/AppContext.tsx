@@ -52,6 +52,7 @@ interface AppContextType {
   selectTrip: (id: string) => void;
   updateTripStatus: (tripId: string, newStatus: string) => void;
   updateTripClearanceStatus: (tripId: string, status: Trip['clearanceStatus'], protocol?: string) => void;
+  releaseTripManually: (tripId: string, reason: string) => boolean;
   updateDeliveryStatus: (deliveryId: string, newStatus: Delivery['status'], signedProofUrl?: string) => void;
   submitRomaneio: (notes: string, files: string[]) => Promise<Romaneio>;
   submitToll: (value: number, notes: string, plaza?: string) => Promise<TollReceipt>;
@@ -173,6 +174,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ...prev
       ]);
     }
+  };
+
+  const releaseTripManually = (tripId: string, reason: string): boolean => {
+    const normalizedRole = userProfile?.role.toUpperCase() || '';
+    const canRelease = normalizedRole.includes('ADMIN') || normalizedRole.includes('OPER');
+    const normalizedReason = reason.trim();
+
+    if (!canRelease || !normalizedReason) {
+      return false;
+    }
+
+    setTrips(prev =>
+      prev.map(t =>
+        t.id === tripId
+          ? {
+              ...t,
+              clearanceStatus: 'LIBERACAO_MANUAL',
+              clearanceProtocol: `MANUAL-${tripId}`,
+              clearanceUpdatedAt: new Date().toLocaleString('pt-BR'),
+              manualClearanceReason: normalizedReason,
+              manualClearedBy: userProfile?.name || 'Administrador'
+            }
+          : t
+      )
+    );
+
+    setNotifications(prev => [
+      {
+        id: `manual_clearance_${tripId}_${Date.now()}`,
+        title: 'Viagem Liberada pela Operação',
+        message: `A viagem ${tripId} foi liberada manualmente. Motivo: ${normalizedReason}`,
+        timeLabel: 'Agora',
+        type: 'APROVADO',
+        valueText: 'Viagem',
+        valueLabel: tripId,
+        read: false
+      },
+      ...prev
+    ]);
+
+    return true;
   };
 
   const updateDeliveryStatus = (
@@ -329,6 +371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectTrip,
         updateTripStatus,
         updateTripClearanceStatus,
+        releaseTripManually,
         updateDeliveryStatus,
         submitRomaneio,
         submitToll,

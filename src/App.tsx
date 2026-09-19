@@ -14,6 +14,7 @@ import { SendTollScreen } from './screens/SendTollScreen';
 import { FinanceScreen } from './screens/FinanceScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { AdminPendingTripsScreen } from './screens/AdminPendingTripsScreen';
 
 const MainLayout: React.FC = () => {
   const { currentScreen, isAuthenticated } = useApp();
@@ -48,6 +49,8 @@ const MainLayout: React.FC = () => {
         return <NotificationsScreen />;
       case 'PROFILE':
         return <ProfileScreen />;
+      case 'ADMIN_PENDING_TRIPS':
+        return <AdminPendingTripsScreen />;
       default:
         return <HomeScreen />;
     }

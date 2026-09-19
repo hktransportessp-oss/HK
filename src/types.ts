@@ -10,7 +10,8 @@ export type ScreenType =
   | 'SEND_TOLL'
   | 'FINANCE'
   | 'NOTIFICATIONS'
-  | 'PROFILE';
+  | 'PROFILE'
+  | 'ADMIN_PENDING_TRIPS';
 
 export interface UserProfile {
   id: string;
@@ -34,6 +35,7 @@ export type TripStatus =
 export type ClearanceStatus =
   | 'AGUARDANDO_LIBERACAO'
   | 'CARGA_LIBERADA'
+  | 'LIBERACAO_MANUAL'
   | 'LIBERACAO_PENDENTE'
   | 'ERRO_LIBERACAO';
 
@@ -58,6 +60,8 @@ export interface Trip {
   clearanceStatus: ClearanceStatus;
   clearanceProtocol?: string;
   clearanceUpdatedAt?: string;
+  manualClearanceReason?: string;
+  manualClearedBy?: string;
 }
 
 export interface Delivery {

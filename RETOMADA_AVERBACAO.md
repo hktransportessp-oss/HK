@@ -75,3 +75,16 @@ O app já possui uma primeira camada visual para o fluxo de liberação:
 - A mudança para `CARGA_LIBERADA` gera uma notificação no contexto do app.
 
 Essa camada ainda usa dados locais de demonstração. O backend/Lovable deve substituir os dados locais pelos estados persistidos no Supabase e pela resposta validada da Focus NFe/SEFAZ/AverbePorto.
+
+## Painel administrativo implementado
+
+Foi criada a tela `ADMIN_PENDING_TRIPS` para perfis cujo `role` contenha `ADMIN` ou `OPER`.
+
+- Lista viagens em `AGUARDANDO_LIBERACAO`, `LIBERACAO_PENDENTE` ou `ERRO_LIBERACAO`.
+- Exibe motorista, veículo, rota, NF-es e última tentativa.
+- Exibe `Liberar viagem` com confirmação e justificativa obrigatória.
+- Registra responsável, data/hora, protocolo manual e motivo no estado da viagem.
+- Gera notificação para o motorista.
+- Usa o estado separado `LIBERACAO_MANUAL`; não altera a resposta original da AverbePorto.
+
+Essa implementação é a camada local de interface/demonstração. O backend deve validar o papel do usuário, persistir a auditoria no Supabase e aplicar a autorização real antes de aceitar a liberação.

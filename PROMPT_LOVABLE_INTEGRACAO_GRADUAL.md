@@ -118,6 +118,19 @@ A primeira camada visual já foi implementada no app e deve ser conectada aos es
 
 Não tratar os dados locais de demonstração como autorização fiscal. Substituí-los pelos estados persistidos no Supabase somente depois de validar CT-e, MDF-e e a resposta oficial da operação.
 
+## Painel administrativo — viagens pendentes
+
+A tela `ADMIN_PENDING_TRIPS` foi criada para perfis administrativos/operacionais e deve ser conectada ao backend real.
+
+1. Listar viagens com `AGUARDANDO_LIBERACAO`, `LIBERACAO_PENDENTE` ou `ERRO_LIBERACAO`.
+2. Exibir motorista, CPF, veículo/placa, romaneio, NF-es, CT-e, MDF-e, rota, status AverbePorto, motivo e última tentativa.
+3. Exibir `Liberar viagem` somente para usuário autorizado.
+4. Exigir confirmação e justificativa obrigatória.
+5. Persistir no Supabase o administrador, data/hora, motivo, status anterior, novo status e auditoria.
+6. Notificar o motorista após a alteração.
+7. Usar `LIBERACAO_MANUAL` quando a operação liberar manualmente; nunca apresentar essa ação como autorização original da AverbePorto.
+8. Validar o `role` no backend/RLS, não somente no frontend.
+
 ## Fluxo de processamento
 
 Implementar nesta ordem:
