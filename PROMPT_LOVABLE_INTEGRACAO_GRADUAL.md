@@ -107,6 +107,18 @@ Regras obrigatórias:
 9. Não chamar produção, SEFAZ com validade fiscal ou AverbePorto enquanto a etapa de homologação não estiver aprovada.
 10. Salvar apenas status e respostas sanitizadas no Supabase; nunca tokens, certificado ou senhas em tabela comum.
 
+Use exatamente os nomes canônicos do `.env.example` para a configuração fiscal. Não criar nomes alternativos nem duplicar a integração:
+
+- `FOCUSNFE_ENVIRONMENT` — iniciar com `homologacao`;
+- `FOCUSNFE_BASE_URL_HOMOLOGACAO`;
+- `FOCUSNFE_BASE_URL_PRODUCAO`;
+- `FOCUSNFE_TOKEN_HOMOLOGACAO`;
+- `FOCUSNFE_TOKEN_PRODUCAO` somente quando autorizado;
+- `FISCAL_EMISSION_ENABLED=false`;
+- `FISCAL_DRY_RUN=true`.
+
+Produção só poderá ser habilitada após a validação em homologação, sem alterar as tabelas existentes ou criar outro provedor paralelo.
+
 ## Interface de liberação do motorista
 
 A primeira camada visual já foi implementada no app e deve ser conectada aos estados reais do backend:

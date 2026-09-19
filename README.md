@@ -23,3 +23,41 @@ npm run dev
 ```
 
 O servidor iniciará em `http://0.0.0.0:3000`.
+
+## Integração fiscal preparada
+
+O projeto já possui as tabelas de liberação operacional no Supabase:
+
+- `trip_clearances`: estado atual da liberação;
+- `trip_clearance_audits`: histórico de respostas e liberações administrativas.
+
+Não crie tabelas duplicadas. O Lovable deve consumir esses dados por endpoints do backend autorizados.
+
+### Focus NFe
+
+A integração fiscal deve começar em homologação, sem validade fiscal:
+
+- CT-e e MDF-e: `https://homologacao.focusnfe.com.br/v2`;
+- autenticação: HTTP Basic, token como usuário e senha vazia;
+- `FISCAL_EMISSION_ENABLED=false`;
+- `FISCAL_DRY_RUN=true`.
+
+As variáveis de produção ficam preparadas no `.env.example`, mas não devem ser preenchidas ou ativadas antes da validação fiscal e autorização da HK.
+
+Secrets obrigatórios do backend:
+
+- `FOCUSNFE_TOKEN_HOMOLOGACAO`;
+- `FOCUSNFE_TOKEN_PRODUCAO`, somente na etapa de produção;
+- certificado digital A1/PFX ou P12 e senha, somente no mecanismo seguro do provedor.
+
+### Fluxo de ativação
+
+1. Ler a NF-e do Gmail e obter o XML completo.
+2. Relacionar NF-e, motorista, veículo, romaneio e rota.
+3. Montar CT-e/MDF-e em `dry_run`.
+4. Testar em homologação.
+5. Consultar autorização ou webhook.
+6. Atualizar `trip_clearances` e `trip_clearance_audits`.
+7. Somente após aprovação formal, configurar produção e desligar o `dry_run`.
+
+Nenhum token, certificado ou senha deve ser colocado no frontend, Git, README ou tabela comum do Supabase.

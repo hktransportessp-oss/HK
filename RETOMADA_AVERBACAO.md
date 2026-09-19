@@ -105,3 +105,7 @@ As tabelas foram verificadas diretamente no Supabase e estão presentes:
 - `trip_clearance_audits` — disponível via REST.
 
 O Lovable deve consumir essas tabelas por endpoints autorizados, usar `trip_clearances` para o estado atual e `trip_clearance_audits` para o histórico. Não deve recriar as tabelas nem acessar credenciais pelo frontend.
+
+## Preparação para produção sem ativação
+
+O `.env.example` agora documenta a configuração única da Focus NFe, com homologação como padrão e produção desativada. Não existe integração Focus NFe duplicada no código atual; a implementação deverá usar essa configuração quando o teste for autorizado.
