@@ -96,3 +96,12 @@ Foi criada a migration:
 - `supabase/migrations/20260919210000_create_trip_clearance_tables.sql`
 
 Ela cria `trip_clearances` para o estado atual e `trip_clearance_audits` para o histórico. As tabelas usam RLS sem policies públicas: a leitura/escrita deve ocorrer pelo backend com service role, e o Lovable deve consumir endpoints autorizados. A migration ainda precisa ser aplicada no SQL Editor do Supabase ou por uma ferramenta de migration com acesso administrativo.
+
+### Confirmação posterior
+
+As tabelas foram verificadas diretamente no Supabase e estão presentes:
+
+- `trip_clearances` — disponível via REST.
+- `trip_clearance_audits` — disponível via REST.
+
+O Lovable deve consumir essas tabelas por endpoints autorizados, usar `trip_clearances` para o estado atual e `trip_clearance_audits` para o histórico. Não deve recriar as tabelas nem acessar credenciais pelo frontend.

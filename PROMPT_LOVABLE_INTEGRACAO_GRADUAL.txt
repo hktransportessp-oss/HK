@@ -160,6 +160,20 @@ Use estados claros e persistidos, sem apagar histórico:
 - erro_permanente
 - cancelado
 
+TABELAS DE LIBERACAO JA CRIADAS
+
+As tabelas trip_clearances e trip_clearance_audits já foram confirmadas no Supabase. Não recriar essas tabelas.
+
+O Lovable deve:
+
+1. Ler trip_clearances no backend para o painel administrativo e o status do motorista.
+2. Filtrar AGUARDANDO_LIBERACAO, LIBERACAO_PENDENTE e ERRO_LIBERACAO.
+3. Exigir justificativa e validar o role no backend ao liberar manualmente.
+4. Atualizar trip_clearances para LIBERACAO_MANUAL e inserir o evento em trip_clearance_audits.
+5. Registrar administrador, data/hora, status anterior, novo status e motivo.
+6. Notificar o motorista sem expor dados sensíveis.
+7. Preservar a resposta original da AverbePorto, sem tratar liberação manual como autorização automática.
+
 FLAGS DE ATIVAÇÃO
 
 Adicionar configuração segura para ativação gradual, por exemplo:
