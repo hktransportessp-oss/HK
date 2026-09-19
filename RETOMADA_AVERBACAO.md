@@ -88,3 +88,11 @@ Foi criada a tela `ADMIN_PENDING_TRIPS` para perfis cujo `role` contenha `ADMIN`
 - Usa o estado separado `LIBERACAO_MANUAL`; não altera a resposta original da AverbePorto.
 
 Essa implementação é a camada local de interface/demonstração. O backend deve validar o papel do usuário, persistir a auditoria no Supabase e aplicar a autorização real antes de aceitar a liberação.
+
+## Migration do Supabase criada
+
+Foi criada a migration:
+
+- `supabase/migrations/20260919210000_create_trip_clearance_tables.sql`
+
+Ela cria `trip_clearances` para o estado atual e `trip_clearance_audits` para o histórico. As tabelas usam RLS sem policies públicas: a leitura/escrita deve ocorrer pelo backend com service role, e o Lovable deve consumir endpoints autorizados. A migration ainda precisa ser aplicada no SQL Editor do Supabase ou por uma ferramenta de migration com acesso administrativo.

@@ -125,6 +125,9 @@ A tela ADMIN_PENDING_TRIPS foi criada para perfis administrativos/operacionais e
 7. Usar LIBERACAO_MANUAL quando a operação liberar manualmente; nunca apresentar essa ação como autorização original da AverbePorto.
 8. Validar o role no backend/RLS, não somente no frontend.
 
+Migration preparada no repositório: supabase/migrations/20260919210000_create_trip_clearance_tables.sql.
+Aplicar no Supabase antes do uso real. O backend deve ler/escrever com service role e expor endpoints autorizados; o Lovable não deve executar DDL nem acessar essas tabelas diretamente pelo frontend.
+
 FLUXO DE PROCESSAMENTO
 
 Implementar nesta ordem:
