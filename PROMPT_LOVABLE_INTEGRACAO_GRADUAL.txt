@@ -51,6 +51,31 @@ Endpoints previstos:
 
 O endpoint Gmail já validado no ambiente Lovable é a referência de integração existente. Preserve seu contrato e não exponha o token no navegador.
 
+INTEGRAÇÃO AVERBEPORTO — SECRETS DO PAINEL WEB SERVICE
+
+As únicas credenciais disponibilizadas pelo painel Web Service da AverbePorto são:
+
+- AVERBE_PORTO_API_USUARIO
+- AVERBE_PORTO_API_SENHA
+
+Use essas duas Secrets exclusivamente no backend. Não peça, copie ou exiba os valores no frontend, nos logs, no Git, em respostas JSON ou em tabelas comuns do Supabase.
+
+Manter o endpoint protegido:
+
+- POST /api/v1/averbeporto/test-connection
+
+O endpoint deve:
+
+1. Ler as duas Secrets no ambiente seguro do backend.
+2. Usar https://apis.averbeporto.com.br/php/conn.php.
+3. Enviar mod=login, comp=5, user e pass via application/x-www-form-urlencoded.
+4. Validar a resposta e a existência do cookie de sessão portal[ses].
+5. Exigir x-internal-api-key antes de executar a chamada.
+6. Retornar somente status sanitizado, por exemplo success e connected.
+7. Nunca enviar XML ou realizar averbação real durante o teste de conexão.
+
+Se for necessário persistir configuração no Supabase, salvar apenas status, ambiente, data do último teste e mensagem sanitizada. Segredos persistidos devem usar Supabase Vault ou Secrets do backend, nunca uma tabela pública comum.
+
 FLUXO DE PROCESSAMENTO
 
 Implementar nesta ordem:
